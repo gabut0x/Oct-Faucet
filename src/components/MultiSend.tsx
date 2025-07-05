@@ -324,30 +324,30 @@ export function MultiSend({ wallet, balance, onBalanceUpdate, onTransactionSucce
             {results.map((result, index) => (
               <div
                 key={index}
-                className={`rounded-lg p-4 ${result.success ? 'bg-green-50 border border-green-200' : 'bg-red-50 border border-red-200'}`}
+                className={`rounded-lg p-4 ${result.success ? 'bg-green-50 border border-green-200 dark:bg-green-950/50 dark:border-green-800' : 'bg-red-50 border border-red-200 dark:bg-red-950/50 dark:border-red-800'}`}
               >
                 <div className="flex items-start">
                   {result.success ? (
-                    <CheckCircle className="h-5 w-5 text-green-600 mr-2 mt-0.5 flex-shrink-0" />
+                    <CheckCircle className="h-5 w-5 text-green-600 dark:text-green-400 mr-2 mt-0.5 flex-shrink-0" />
                   ) : (
-                    <AlertTriangle className="h-5 w-5 text-red-600 mr-2 mt-0.5 flex-shrink-0" />
+                    <AlertTriangle className="h-5 w-5 text-red-600 dark:text-red-400 mr-2 mt-0.5 flex-shrink-0" />
                   )}
                   <div className="flex-1">
-                    <p className={`text-sm font-medium ${result.success ? 'text-green-800' : 'text-red-800'}`}>
-                      {result.success ? 'Success' : 'Failed'} - {result.recipient} ( {result.amount} OCT )
+                    <p className={`text-sm font-medium ${result.success ? 'text-green-800 dark:text-green-200' : 'text-red-800 dark:text-red-200'}`}>
+                      {result.success ? 'Success' : 'Failed'} - {result.recipient} ({result.amount} OCT)
                     </p>
                     {result.success && result.hash && (
                       <div className="mt-2">
-                        <p className="text-green-700 text-sm">Transaction Hash:</p>
+                        <p className="text-green-700 dark:text-green-300 text-sm">Transaction Hash:</p>
                         <div className="flex items-center mt-1">
-                          <code className="text-xs bg-green-100 px-2 py-1 rounded font-mono break-all">
+                          <code className="text-xs bg-green-100 dark:bg-green-900/50 px-2 py-1 rounded font-mono break-all text-green-800 dark:text-green-200">
                             {result.hash}
                           </code>
                           <a
                             href={`https://octrascan.io/tx/${result.hash}`}
                             target="_blank"
                             rel="noopener noreferrer"
-                            className="ml-2 text-blue-600 hover:text-blue-800 transition-colors"
+                            className="ml-2 text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300 transition-colors"
                             title="View on OctraScan"
                           >
                             <ExternalLink className="h-4 w-4" />
@@ -356,7 +356,7 @@ export function MultiSend({ wallet, balance, onBalanceUpdate, onTransactionSucce
                       </div>
                     )}
                     {result.error && (
-                      <p className="text-red-700 text-sm mt-1">{result.error}</p>
+                      <p className="text-red-700 dark:text-red-300 text-sm mt-1">{result.error}</p>
                     )}
                   </div>
                 </div>
