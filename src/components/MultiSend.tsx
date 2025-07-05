@@ -29,7 +29,7 @@ export function MultiSend({ wallet, balance, onBalanceUpdate, onTransactionSucce
   ]);
   const [isSending, setIsSending] = useState(false);
   const [nonce, setNonce] = useState(0);
-  const [results, setResults] = useState<Array<{ success: boolean; hash?: string; error?: string; recipient: string; amount: string }>>([]);
+  const [results, setResults] = useState<Array<{ success: boolean; hash?: string; error?: string; recipient: string }>>([]);
   const { toast } = useToast();
 
   // Fetch nonce when wallet changes
@@ -116,7 +116,7 @@ export function MultiSend({ wallet, balance, onBalanceUpdate, onTransactionSucce
     }
 
     setIsSending(true);
-    setResults([] as TransactionResult[]);
+    setResults([]);
 
     try {
       // Refresh nonce before sending
@@ -146,8 +146,7 @@ export function MultiSend({ wallet, balance, onBalanceUpdate, onTransactionSucce
           
           transactionResults.push({
             ...result,
-            recipient: recipient.address,
-            amount: recipient.amount
+            recipient: recipient.address
           });
 
           if (result.success) {
@@ -162,8 +161,7 @@ export function MultiSend({ wallet, balance, onBalanceUpdate, onTransactionSucce
           transactionResults.push({
             success: false,
             error: error instanceof Error ? error.message : 'Unknown error',
-            recipient: recipient.address,
-            amount: recipient.amount
+            recipient: recipient.address
           });
         }
       }
@@ -334,7 +332,7 @@ export function MultiSend({ wallet, balance, onBalanceUpdate, onTransactionSucce
                   )}
                   <div className="flex-1">
                     <p className={`text-sm font-medium ${result.success ? 'text-green-800' : 'text-red-800'}`}>
-                      {result.success ? 'Success' : 'Failed'} - {result.recipient} ( {Number(result.amount).toFixed(8)} OCT )
+                      {result.success ? 'Success' : 'Failed'} - {result.recipient}
                     </p>
                     {result.success && result.hash && (
                       <div className="mt-2">
