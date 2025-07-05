@@ -29,7 +29,7 @@ export function MultiSend({ wallet, balance, onBalanceUpdate, onTransactionSucce
   ]);
   const [isSending, setIsSending] = useState(false);
   const [nonce, setNonce] = useState(0);
-  const [results, setResults] = useState<Array<{ success: boolean; hash?: string; error?: string; recipient: string }>>([]);
+  const [results, setResults] = useState<Array<{ success: boolean; hash?: string; error?: string; recipient: string; amount: string }>>([]);
   const { toast } = useToast();
 
   // Fetch nonce when wallet changes
