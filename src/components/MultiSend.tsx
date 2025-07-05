@@ -146,7 +146,8 @@ export function MultiSend({ wallet, balance, onBalanceUpdate, onTransactionSucce
           
           transactionResults.push({
             ...result,
-            recipient: recipient.address
+            recipient: recipient.address,
+            amount: recipient.amount
           });
 
           if (result.success) {
@@ -332,7 +333,7 @@ export function MultiSend({ wallet, balance, onBalanceUpdate, onTransactionSucce
                   )}
                   <div className="flex-1">
                     <p className={`text-sm font-medium ${result.success ? 'text-green-800' : 'text-red-800'}`}>
-                      {result.success ? 'Success' : 'Failed'} - {result.recipient}
+                      {result.success ? 'Success' : 'Failed'} - {result.recipient} ( {Number(result.amount).toFixed(8)} OCT )
                     </p>
                     {result.success && result.hash && (
                       <div className="mt-2">
