@@ -29,7 +29,7 @@ export function MultiSend({ wallet, balance, onBalanceUpdate, onTransactionSucce
   ]);
   const [isSending, setIsSending] = useState(false);
   const [nonce, setNonce] = useState(0);
-  const [results, setResults] = useState<Array<{ success: boolean; hash?: string; error?: string; recipient: string }>>([]);
+  const [results, setResults] = useState<Array<{ success: boolean; hash?: string; error?: string; recipient: string; amount: string }>>([]);
   const { toast } = useToast();
 
   // Fetch nonce when wallet changes
@@ -124,7 +124,7 @@ export function MultiSend({ wallet, balance, onBalanceUpdate, onTransactionSucce
       let currentNonce = freshBalanceData.nonce;
 
       const validRecipients = recipients.filter(r => r.address && Number(r.amount) > 0);
-      const transactionResults: Array<{ success: boolean; hash?: string; error?: string; recipient: string }> = [];
+      const transactionResults: Array<{ success: boolean; hash?: string; error?: string; recipient: string; amount: string }> = [];
 
       // Send transactions sequentially to maintain nonce order
       for (let i = 0; i < validRecipients.length; i++) {
@@ -146,7 +146,8 @@ export function MultiSend({ wallet, balance, onBalanceUpdate, onTransactionSucce
           
           transactionResults.push({
             ...result,
-            recipient: recipient.address
+            recipient: recipient.address,
+            amount: recipient.amount
           });
 
           if (result.success) {
@@ -161,7 +162,8 @@ export function MultiSend({ wallet, balance, onBalanceUpdate, onTransactionSucce
           transactionResults.push({
             success: false,
             error: error instanceof Error ? error.message : 'Unknown error',
-            recipient: recipient.address
+            recipient: recipient.address,
+            amount: recipient.amount
           });
         }
       }
@@ -332,7 +334,7 @@ export function MultiSend({ wallet, balance, onBalanceUpdate, onTransactionSucce
                   )}
                   <div className="flex-1">
                     <p className={`text-sm font-medium ${result.success ? 'text-green-800' : 'text-red-800'}`}>
-                      {result.success ? 'Success' : 'Failed'} - {result.recipient}
+                      {result.success ? 'Success' : 'Failed'} - {result.recipient} ( {result.amount} OCT )
                     </p>
                     {result.success && result.hash && (
                       <div className="mt-2">
