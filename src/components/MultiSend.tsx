@@ -116,7 +116,7 @@ export function MultiSend({ wallet, balance, onBalanceUpdate, onTransactionSucce
     }
 
     setIsSending(true);
-    setResults([]);
+    setResults([] as TransactionResult[]);
 
     try {
       // Refresh nonce before sending
@@ -162,7 +162,8 @@ export function MultiSend({ wallet, balance, onBalanceUpdate, onTransactionSucce
           transactionResults.push({
             success: false,
             error: error instanceof Error ? error.message : 'Unknown error',
-            recipient: recipient.address
+            recipient: recipient.address,
+            amount: recipient.amount
           });
         }
       }
