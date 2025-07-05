@@ -332,7 +332,7 @@ export function MultiSend({ wallet, balance, onBalanceUpdate, onTransactionSucce
                   )}
                   <div className="flex-1">
                     <p className={`text-sm font-medium ${result.success ? 'text-green-800' : 'text-red-800'}`}>
-                      {result.success ? 'Success' : 'Failed'} - {result.recipient} - {result.amount} OCT
+                      {result.success ? 'Success' : 'Failed'} - {result.recipient}
                     </p>
                     {result.success && result.hash && (
                       <div className="mt-2">
