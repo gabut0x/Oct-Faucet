@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -36,11 +36,13 @@ interface Transaction {
 
 interface TxHistoryProps {
   wallet: Wallet | null;
+  transactions: Transaction[];
+  onTransactionsUpdate: (transactions: Transaction[]) => void;
+  isLoading?: boolean;
 }
 
-export function TxHistory({ wallet }: TxHistoryProps) {
-  const [transactions, setTransactions] = useState<Transaction[]>([]);
-  const [loading, setLoading] = useState(false);
+export function TxHistory({ wallet, transactions, onTransactionsUpdate, isLoading = false }: TxHistoryProps) {
+  const [refreshing, setRefreshing] = useState(false);
   const [selectedTx, setSelectedTx] = useState<TransactionDetails | PendingTransaction | null>(null);
   const [loadingDetails, setLoadingDetails] = useState(false);
   const { toast } = useToast();
@@ -48,14 +50,14 @@ export function TxHistory({ wallet }: TxHistoryProps) {
   const fetchTransactions = async () => {
     if (!wallet) return;
     
-    setLoading(true);
+    setRefreshing(true);
     
     try {
       const historyData = await getTransactionHistory(wallet.address);
       
       if (!Array.isArray(historyData)) {
         console.error('Transaction history data is not an array:', historyData);
-        setTransactions([]);
+        onTransactionsUpdate([]);
         return;
       }
       
@@ -65,10 +67,10 @@ export function TxHistory({ wallet }: TxHistoryProps) {
         type: tx.from?.toLowerCase() === wallet.address.toLowerCase() ? 'sent' : 'received'
       } as Transaction));
       
-      setTransactions(transformedTxs);
+      onTransactionsUpdate(transformedTxs);
       
       toast({
-        title: "Success",
+        title: "Transactions Updated",
         description: `Loaded ${transformedTxs.length} transactions`,
       });
       
@@ -76,12 +78,11 @@ export function TxHistory({ wallet }: TxHistoryProps) {
       console.error('Error fetching transactions:', error);
       toast({
         title: "Error",
-        description: "Failed to fetch transaction history",
+        description: "Failed to refresh transaction history",
         variant: "destructive",
       });
-      setTransactions([]);
     } finally {
-      setLoading(false);
+      setRefreshing(false);
     }
   };
 
@@ -113,19 +114,6 @@ export function TxHistory({ wallet }: TxHistoryProps) {
       setLoadingDetails(false);
     }
   };
-
-  useEffect(() => {
-    fetchTransactions();
-    
-    // Set up auto-refresh for pending transactions every 30 seconds
-    const interval = setInterval(() => {
-      if (wallet) {
-        fetchTransactions();
-      }
-    }, 30000);
-    
-    return () => clearInterval(interval);
-  }, [wallet]);
 
   const formatDate = (timestamp: number) => {
     return new Date(timestamp * 1000).toLocaleString();
@@ -214,14 +202,14 @@ export function TxHistory({ wallet }: TxHistoryProps) {
           variant="outline"
           size="sm"
           onClick={fetchTransactions}
-          disabled={loading}
+          disabled={refreshing}
         >
-          <RefreshCw className={`h-4 w-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
+          <RefreshCw className={`h-4 w-4 mr-2 ${refreshing ? 'animate-spin' : ''}`} />
           Refresh
         </Button>
       </CardHeader>
       <CardContent>
-        {loading ? (
+        {isLoading ? (
           <div className="space-y-4">
             <div className="text-sm text-muted-foreground">Loading transactions...</div>
             {[...Array(3)].map((_, i) => (

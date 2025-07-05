@@ -11,36 +11,38 @@ import { useToast } from '@/hooks/use-toast';
 
 interface BalanceProps {
   wallet: WalletType | null;
+  balance: number | null;
+  onBalanceUpdate: (balance: number) => void;
+  isLoading?: boolean;
 }
 
-export function Balance({ wallet }: BalanceProps) {
-  const [balance, setBalance] = useState<number | null>(null);
-  const [loading, setLoading] = useState(false);
+export function Balance({ wallet, balance, onBalanceUpdate, isLoading = false }: BalanceProps) {
+  const [refreshing, setRefreshing] = useState(false);
   const [showPrivateKey, setShowPrivateKey] = useState(false);
   const { toast } = useToast();
 
   const fetchWalletBalance = async () => {
     if (!wallet) return;
     
-    setLoading(true);
+    setRefreshing(true);
     try {
       const balanceData = await fetchBalance(wallet.address);
-      setBalance(balanceData.balance);
+      onBalanceUpdate(balanceData.balance);
+      toast({
+        title: "Balance Updated",
+        description: "Balance has been refreshed successfully",
+      });
     } catch (error) {
       toast({
         title: "Error",
-        description: "Failed to fetch balance",
+        description: "Failed to refresh balance",
         variant: "destructive",
       });
       console.error('Balance fetch error:', error);
     } finally {
-      setLoading(false);
+      setRefreshing(false);
     }
   };
-
-  useEffect(() => {
-    fetchWalletBalance();
-  }, [wallet]);
 
   const copyToClipboard = async (text: string, label: string) => {
     try {
@@ -79,15 +81,15 @@ export function Balance({ wallet }: BalanceProps) {
             variant="outline"
             size="sm"
             onClick={fetchWalletBalance}
-            disabled={loading}
+            disabled={refreshing}
           >
-            <RefreshCw className={`h-4 w-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
+            <RefreshCw className={`h-4 w-4 mr-2 ${refreshing ? 'animate-spin' : ''}`} />
             Refresh
           </Button>
         </CardHeader>
         <CardContent className="space-y-6">
           <div className="text-center">
-            {loading ? (
+            {isLoading ? (
               <Skeleton className="h-12 w-32 mx-auto" />
             ) : (
               <div className="space-y-2">

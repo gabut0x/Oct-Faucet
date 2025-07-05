@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -17,7 +17,18 @@ import { MultiSend } from './MultiSend';
 import { TxHistory } from './TxHistory';
 import { ThemeToggle } from './ThemeToggle';
 import { Wallet } from '../types/wallet';
+import { fetchBalance, getTransactionHistory } from '../utils/api';
 import { useToast } from '@/hooks/use-toast';
+
+interface Transaction {
+  hash: string;
+  from: string;
+  to: string;
+  amount: number;
+  timestamp: number;
+  status: 'confirmed' | 'pending' | 'failed';
+  type: 'sent' | 'received';
+}
 
 interface WalletDashboardProps {
   wallet: Wallet;
@@ -26,7 +37,59 @@ interface WalletDashboardProps {
 
 export function WalletDashboard({ wallet, onDisconnect }: WalletDashboardProps) {
   const [activeTab, setActiveTab] = useState<string>('overview');
+  const [balance, setBalance] = useState<number | null>(null);
+  const [transactions, setTransactions] = useState<Transaction[]>([]);
+  const [isLoadingBalance, setIsLoadingBalance] = useState(true);
+  const [isLoadingTransactions, setIsLoadingTransactions] = useState(true);
   const { toast } = useToast();
+
+  // Initial data fetch when wallet is connected
+  useEffect(() => {
+    const fetchInitialData = async () => {
+      if (!wallet) return;
+
+      try {
+        // Fetch balance
+        setIsLoadingBalance(true);
+        const balanceData = await fetchBalance(wallet.address);
+        setBalance(balanceData.balance);
+      } catch (error) {
+        console.error('Failed to fetch balance:', error);
+        toast({
+          title: "Error",
+          description: "Failed to fetch wallet balance",
+          variant: "destructive",
+        });
+      } finally {
+        setIsLoadingBalance(false);
+      }
+
+      try {
+        // Fetch transaction history
+        setIsLoadingTransactions(true);
+        const historyData = await getTransactionHistory(wallet.address);
+        
+        if (Array.isArray(historyData)) {
+          const transformedTxs = historyData.map((tx) => ({
+            ...tx,
+            type: tx.from?.toLowerCase() === wallet.address.toLowerCase() ? 'sent' : 'received'
+          } as Transaction));
+          setTransactions(transformedTxs);
+        }
+      } catch (error) {
+        console.error('Failed to fetch transaction history:', error);
+        toast({
+          title: "Error",
+          description: "Failed to fetch transaction history",
+          variant: "destructive",
+        });
+      } finally {
+        setIsLoadingTransactions(false);
+      }
+    };
+
+    fetchInitialData();
+  }, [wallet, toast]);
 
   const copyToClipboard = async (text: string, label: string) => {
     try {
@@ -48,6 +111,36 @@ export function WalletDashboard({ wallet, onDisconnect }: WalletDashboardProps) 
     if (window.confirm('Are you sure you want to disconnect your wallet? Make sure you have backed up your private key or mnemonic phrase.')) {
       onDisconnect();
     }
+  };
+
+  const handleBalanceUpdate = (newBalance: number) => {
+    setBalance(newBalance);
+  };
+
+  const handleTransactionsUpdate = (newTransactions: Transaction[]) => {
+    setTransactions(newTransactions);
+  };
+
+  const handleTransactionSuccess = () => {
+    // Refresh transaction history after successful transaction
+    const refreshTransactions = async () => {
+      try {
+        const historyData = await getTransactionHistory(wallet.address);
+        
+        if (Array.isArray(historyData)) {
+          const transformedTxs = historyData.map((tx) => ({
+            ...tx,
+            type: tx.from?.toLowerCase() === wallet.address.toLowerCase() ? 'sent' : 'received'
+          } as Transaction));
+          setTransactions(transformedTxs);
+        }
+      } catch (error) {
+        console.error('Failed to refresh transaction history:', error);
+      }
+    };
+
+    // Small delay to allow transaction to propagate
+    setTimeout(refreshTransactions, 2000);
   };
 
   const truncateAddress = (address: string) => {
@@ -124,15 +217,30 @@ export function WalletDashboard({ wallet, onDisconnect }: WalletDashboardProps) 
           </TabsList>
 
           <TabsContent value="overview" className="space-y-6">
-            <Balance wallet={wallet} />
+            <Balance 
+              wallet={wallet} 
+              balance={balance}
+              onBalanceUpdate={handleBalanceUpdate}
+              isLoading={isLoadingBalance}
+            />
           </TabsContent>
 
           <TabsContent value="send">
-            <MultiSend wallet={wallet} />
+            <MultiSend 
+              wallet={wallet} 
+              balance={balance}
+              onBalanceUpdate={handleBalanceUpdate}
+              onTransactionSuccess={handleTransactionSuccess}
+            />
           </TabsContent>
 
           <TabsContent value="history">
-            <TxHistory wallet={wallet} />
+            <TxHistory 
+              wallet={wallet} 
+              transactions={transactions}
+              onTransactionsUpdate={handleTransactionsUpdate}
+              isLoading={isLoadingTransactions}
+            />
           </TabsContent>
         </Tabs>
       </main>

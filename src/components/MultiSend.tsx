@@ -18,26 +18,31 @@ interface Recipient {
 
 interface MultiSendProps {
   wallet: Wallet | null;
+  balance: number | null;
+  onBalanceUpdate: (balance: number) => void;
+  onTransactionSuccess: () => void;
 }
 
-export function MultiSend({ wallet }: MultiSendProps) {
+export function MultiSend({ wallet, balance, onBalanceUpdate, onTransactionSuccess }: MultiSendProps) {
   const [recipients, setRecipients] = useState<Recipient[]>([
     { address: '', amount: '' }
   ]);
   const [isSending, setIsSending] = useState(false);
   const [nonce, setNonce] = useState(0);
-  const [balance, setBalance] = useState(0);
   const [results, setResults] = useState<Array<{ success: boolean; hash?: string; error?: string; recipient: string }>>([]);
   const { toast } = useToast();
 
-  // Fetch balance and nonce when wallet changes
+  // Fetch nonce when wallet changes
   useEffect(() => {
     const fetchWalletData = async () => {
       if (wallet) {
         try {
           const balanceData = await fetchBalance(wallet.address);
           setNonce(balanceData.nonce);
-          setBalance(balanceData.balance);
+          // Update balance if it's different
+          if (balance !== balanceData.balance) {
+            onBalanceUpdate(balanceData.balance);
+          }
         } catch (error) {
           console.error('Failed to fetch wallet data:', error);
         }
@@ -101,7 +106,7 @@ export function MultiSend({ wallet }: MultiSendProps) {
     }
 
     const totalAmount = getTotalAmount();
-    if (totalAmount > balance) {
+    if (balance !== null && totalAmount > balance) {
       toast({
         title: "Error",
         description: "Insufficient balance for this transaction",
@@ -178,7 +183,10 @@ export function MultiSend({ wallet }: MultiSendProps) {
         // Update nonce and balance
         setNonce(currentNonce);
         const updatedBalance = await fetchBalance(wallet.address);
-        setBalance(updatedBalance.balance);
+        onBalanceUpdate(updatedBalance.balance);
+        
+        // Notify parent component about successful transaction
+        onTransactionSuccess();
       }
     } catch (error) {
       console.error('Multi-send error:', error);
@@ -206,6 +214,7 @@ export function MultiSend({ wallet }: MultiSendProps) {
   }
 
   const totalAmount = getTotalAmount();
+  const currentBalance = balance || 0;
 
   return (
     <Card>
@@ -237,7 +246,7 @@ export function MultiSend({ wallet }: MultiSendProps) {
           <div className="space-y-2">
             <Label>Current Balance</Label>
             <div className="p-3 bg-muted rounded-md font-mono text-sm">
-              {balance.toFixed(8)} OCT
+              {currentBalance.toFixed(8)} OCT
             </div>
           </div>
         </div>
@@ -370,13 +379,13 @@ export function MultiSend({ wallet }: MultiSendProps) {
             </div>
             <div className="flex justify-between">
               <span>Current Balance:</span>
-              <span className="font-mono">{balance.toFixed(8)} OCT</span>
+              <span className="font-mono">{currentBalance.toFixed(8)} OCT</span>
             </div>
             <div className="flex justify-between">
               <span>Starting Nonce:</span>
               <span className="font-mono">{nonce}</span>
             </div>
-            {totalAmount > balance && (
+            {totalAmount > currentBalance && (
               <div className="text-red-600 text-xs mt-2">
                 ⚠️ Insufficient balance for this transaction
               </div>
@@ -386,7 +395,7 @@ export function MultiSend({ wallet }: MultiSendProps) {
 
         <Button 
           onClick={handleSendMultiple}
-          disabled={isSending || !validateRecipients() || totalAmount > balance}
+          disabled={isSending || !validateRecipients() || totalAmount > currentBalance}
           className="w-full"
           size="lg"
         >
