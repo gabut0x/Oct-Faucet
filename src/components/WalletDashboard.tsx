@@ -41,6 +41,7 @@ export function WalletDashboard({ wallet, onDisconnect }: WalletDashboardProps) 
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [isLoadingBalance, setIsLoadingBalance] = useState(true);
   const [isLoadingTransactions, setIsLoadingTransactions] = useState(true);
+  const [nonce, setNonce] = useState(0);
   const { toast } = useToast();
 
   // Initial data fetch when wallet is connected
@@ -49,10 +50,11 @@ export function WalletDashboard({ wallet, onDisconnect }: WalletDashboardProps) 
       if (!wallet) return;
 
       try {
-        // Fetch balance
+        // Fetch balance and nonce
         setIsLoadingBalance(true);
         const balanceData = await fetchBalance(wallet.address);
         setBalance(balanceData.balance);
+        setNonce(balanceData.nonce);
       } catch (error) {
         console.error('Failed to fetch balance:', error);
         toast({
@@ -113,18 +115,31 @@ export function WalletDashboard({ wallet, onDisconnect }: WalletDashboardProps) 
     }
   };
 
-  const handleBalanceUpdate = (newBalance: number) => {
+  const handleBalanceUpdate = async (newBalance: number) => {
     setBalance(newBalance);
+    // Also refresh nonce when balance is updated
+    try {
+      const balanceData = await fetchBalance(wallet.address);
+      setNonce(balanceData.nonce);
+    } catch (error) {
+      console.error('Failed to refresh nonce:', error);
+    }
   };
 
   const handleTransactionsUpdate = (newTransactions: Transaction[]) => {
     setTransactions(newTransactions);
   };
 
-  const handleTransactionSuccess = () => {
-    // Refresh transaction history after successful transaction
-    const refreshTransactions = async () => {
+  const handleTransactionSuccess = async () => {
+    // Refresh transaction history and balance after successful transaction
+    const refreshData = async () => {
       try {
+        // Refresh balance and nonce
+        const balanceData = await fetchBalance(wallet.address);
+        setBalance(balanceData.balance);
+        setNonce(balanceData.nonce);
+
+        // Refresh transaction history
         const historyData = await getTransactionHistory(wallet.address);
         
         if (Array.isArray(historyData)) {
@@ -135,12 +150,12 @@ export function WalletDashboard({ wallet, onDisconnect }: WalletDashboardProps) 
           setTransactions(transformedTxs);
         }
       } catch (error) {
-        console.error('Failed to refresh transaction history:', error);
+        console.error('Failed to refresh data after transaction:', error);
       }
     };
 
     // Small delay to allow transaction to propagate
-    setTimeout(refreshTransactions, 2000);
+    setTimeout(refreshData, 2000);
   };
 
   const truncateAddress = (address: string) => {
@@ -177,9 +192,14 @@ export function WalletDashboard({ wallet, onDisconnect }: WalletDashboardProps) 
                   </div>
                 </div>
               </div>
-              <Badge variant="secondary" className="hidden sm:inline-flex">
-                Connected
-              </Badge>
+              <div className="flex items-center space-x-2">
+                <Badge variant="secondary" className="hidden sm:inline-flex">
+                  Connected
+                </Badge>
+                <Badge variant="outline" className="hidden sm:inline-flex text-xs">
+                  Nonce: {nonce}
+                </Badge>
+              </div>
             </div>
 
             <div className="flex items-center space-x-2">

@@ -151,7 +151,9 @@ export function MultiSend({ wallet, balance, onBalanceUpdate, onTransactionSucce
           });
 
           if (result.success) {
-            currentNonce = transactionNonce; // Update for next transaction
+            // Update local nonce immediately after successful send
+            currentNonce = transactionNonce;
+            setNonce(currentNonce);
           }
 
           // Small delay between transactions
@@ -182,10 +184,18 @@ export function MultiSend({ wallet, balance, onBalanceUpdate, onTransactionSucce
           setRecipients([{ address: '', amount: '' }]);
         }
 
-        // Update nonce and balance
-        setNonce(currentNonce);
-        const updatedBalance = await fetchBalance(wallet.address);
-        onBalanceUpdate(updatedBalance.balance);
+        // Update balance after successful transactions
+        // Wait a bit for the balance to potentially update on the server
+        setTimeout(async () => {
+          try {
+            const updatedBalance = await fetchBalance(wallet.address);
+            onBalanceUpdate(updatedBalance.balance);
+            // Update nonce from server response as well
+            setNonce(updatedBalance.nonce);
+          } catch (error) {
+            console.error('Failed to refresh balance after transaction:', error);
+          }
+        }, 2000);
         
         // Notify parent component about successful transaction
         onTransactionSuccess();
@@ -384,8 +394,12 @@ export function MultiSend({ wallet, balance, onBalanceUpdate, onTransactionSucce
               <span className="font-mono">{currentBalance.toFixed(8)} OCT</span>
             </div>
             <div className="flex justify-between">
-              <span>Starting Nonce:</span>
+              <span>Current Nonce:</span>
               <span className="font-mono">{nonce}</span>
+            </div>
+            <div className="flex justify-between">
+              <span>Next Nonce:</span>
+              <span className="font-mono">{nonce + recipients.filter(r => r.address && Number(r.amount) > 0).length}</span>
             </div>
             {totalAmount > currentBalance && (
               <div className="text-red-600 text-xs mt-2">
