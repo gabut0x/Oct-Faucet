@@ -3,7 +3,6 @@ import react from '@vitejs/plugin-react';
 import { NodeGlobalsPolyfillPlugin } from '@esbuild-plugins/node-globals-polyfill';
 import path from 'path';
 
-// https://vitejs.dev/config/
 export default defineConfig({
   plugins: [react()],
   resolve: {
@@ -26,14 +25,13 @@ export default defineConfig({
       ],
     },
   },
-  // Add the proxy configuration here
   server: {
     proxy: {
-      '/api': { // When your frontend requests '/api/something'
-        target: 'https://octra.network', // It will be proxied to 'https://octra.network/something'
-        changeOrigin: true, // Needed for virtual hosted sites
-        rewrite: (path) => path.replace(/^\/api/, ''), // Removes '/api' prefix when forwarding
-        secure: true, // If the target is HTTPS (recommended)
+      '/api': {
+        target: 'https://octra.network',
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/api/, ''),
+        secure: true,
       },
     },
   },

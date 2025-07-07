@@ -1,97 +1,63 @@
-import * as bip39 from 'bip39';
 import * as nacl from 'tweetnacl';
 
-const BASE58_ALPHABET = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz";
+const MU_FACTOR = 1_000_000;
 
-export function bufferToHex(buffer: Buffer | Uint8Array): string {
-  return Buffer.from(buffer).toString("hex");
+export interface Transaction {
+  from: string;
+  to_: string;
+  amount: string;
+  nonce: number;
+  ou: string;
+  timestamp: number;
+  signature?: string;
+  public_key?: string;
 }
 
-export function bufferToBase64(buffer: Buffer | Uint8Array): string {
-  return Buffer.from(buffer).toString("base64");
-}
-
-export function base64ToBuffer(base64: string): Buffer {
-  return Buffer.from(base64, 'base64');
-}
-
-export function base58Encode(buffer: Buffer): string {
-  if (buffer.length === 0) return "";
-
-  let num = BigInt("0x" + buffer.toString("hex"));
-  let encoded = "";
-
-  while (num > 0n) {
-    const remainder = num % 58n;
-    num = num / 58n;
-    encoded = BASE58_ALPHABET[Number(remainder)] + encoded;
-  }
-
-  for (let i = 0; i < buffer.length && buffer[i] === 0; i++) {
-    encoded = "1" + encoded;
-  }
-
-  return encoded;
-}
-
-export async function createOctraAddress(publicKey: Buffer): Promise<string> {
-  const hash = Buffer.from(
-    await crypto.subtle.digest('SHA-256', publicKey)
-  );
-  const base58Hash = base58Encode(hash);
-  return "oct" + base58Hash;
-}
-
-export async function deriveMasterKey(seed: Buffer) {
-  const key = Buffer.from("Octra seed", "utf8");
-  const cryptoKey = await crypto.subtle.importKey(
-    'raw',
-    key,
-    { name: 'HMAC', hash: 'SHA-512' },
-    false,
-    ['sign']
-  );
+export function createTransaction(
+  senderAddress: string,
+  recipientAddress: string,
+  amount: number,
+  nonce: number,
+  privateKeyBase64: string,
+  publicKeyHex: string
+): Transaction {
+  // Convert amount to micro units (multiply by 1,000,000)
+  const amountMu = Math.floor(amount * MU_FACTOR);
   
-  const mac = await crypto.subtle.sign('HMAC', cryptoKey, seed);
-  const macBuffer = Buffer.from(mac);
+  // Determine OU based on amount
+  const ou = amount < 1000 ? "1" : "3";
   
-  return {
-    masterPrivateKey: macBuffer.slice(0, 32),
-    masterChainCode: macBuffer.slice(32, 64)
+  // Create timestamp with small random component
+  const timestamp = Date.now() / 1000 + Math.random() * 0.01;
+
+  // Create base transaction object
+  const transaction: Transaction = {
+    from: senderAddress,
+    to_: recipientAddress,
+    amount: amountMu.toString(),
+    nonce,
+    ou,
+    timestamp
   };
-}
 
-export function generateMnemonic(): string {
-  return bip39.generateMnemonic();
-}
-
-export function validateMnemonic(mnemonic: string): boolean {
-  return bip39.validateMnemonic(mnemonic);
-}
-
-export function mnemonicToSeed(mnemonic: string): Buffer {
-  return bip39.mnemonicToSeedSync(mnemonic);
-}
-
-export async function generateWalletFromMnemonic(mnemonic: string) {
-  if (!validateMnemonic(mnemonic)) {
-    throw new Error('Invalid mnemonic phrase');
-  }
-
-  const seed = mnemonicToSeed(mnemonic);
-  const { masterPrivateKey } = await deriveMasterKey(seed);
+  // Convert transaction to JSON string for signing
+  const txString = JSON.stringify(transaction, null, 0);
   
-  const keyPair = nacl.sign.keyPair.fromSeed(masterPrivateKey);
-  const privateKey = Buffer.from(keyPair.secretKey.slice(0, 32));
-  const publicKey = Buffer.from(keyPair.publicKey);
-  const address = await createOctraAddress(publicKey);
+  // Prepare keys for signing
+  const privateKeyBuffer = Buffer.from(privateKeyBase64, 'base64');
+  const publicKeyBuffer = Buffer.from(publicKeyHex, 'hex');
+  
+  // Create secret key for nacl (64 bytes: 32 private + 32 public)
+  const secretKey = new Uint8Array(64);
+  secretKey.set(privateKeyBuffer, 0);
+  secretKey.set(publicKeyBuffer, 32);
 
-  return {
-    mnemonic,
-    privateKey: bufferToBase64(privateKey),
-    publicKey: bufferToHex(publicKey),
-    address,
-    balance: 0,
-    nonce: 0
-  };
+  // Sign the transaction
+  const signature = nacl.sign.detached(new TextEncoder().encode(txString), secretKey);
+
+  // Add signature and public key to transaction
+  transaction.signature = Buffer.from(signature).toString('base64');
+  transaction.public_key = Buffer.from(publicKeyBuffer).toString('base64');
+
+  return transaction;
 }

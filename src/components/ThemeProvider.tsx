@@ -37,18 +37,6 @@ export function ThemeProvider({
     root.classList.add(theme);
   }, [theme]);
 
-  // Listen for storage events to handle theme reset
-  useEffect(() => {
-    const handleStorageChange = (e: StorageEvent) => {
-      if (e.key === storageKey && e.newValue) {
-        setTheme(e.newValue as Theme);
-      }
-    };
-
-    window.addEventListener('storage', handleStorageChange);
-    return () => window.removeEventListener('storage', handleStorageChange);
-  }, [storageKey]);
-
   const value = {
     theme,
     setTheme: (theme: Theme) => {
