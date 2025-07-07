@@ -12,11 +12,22 @@ interface RecaptchaResponse {
 }
 
 export async function verifyRecaptcha(token: string, clientIP: string): Promise<boolean> {
-  if (!RECAPTCHA_SECRET_KEY) {
+  // Debug log untuk melihat nilai environment variable
+  console.log('=== RECAPTCHA DEBUG ===');
+  console.log('RECAPTCHA_SECRET_KEY exists:', !!RECAPTCHA_SECRET_KEY);
+  console.log('RECAPTCHA_SECRET_KEY length:', RECAPTCHA_SECRET_KEY?.length || 0);
+  console.log('RECAPTCHA_SECRET_KEY preview:', RECAPTCHA_SECRET_KEY?.substring(0, 10) + '...' || 'NOT_SET');
+  console.log('Token length:', token?.length || 0);
+  console.log('Client IP:', clientIP);
+  console.log('======================');
+
+  if (!RECAPTCHA_SECRET_KEY || RECAPTCHA_SECRET_KEY.trim() === '') {
     logger.error('reCAPTCHA secret key not configured', {
       envVarExists: !!process.env.RECAPTCHA_SECRET_KEY,
       envVarLength: process.env.RECAPTCHA_SECRET_KEY?.length || 0,
-      allEnvKeys: Object.keys(process.env).filter(key => key.includes('RECAPTCHA'))
+      allEnvKeys: Object.keys(process.env).filter(key => key.includes('RECAPTCHA')),
+      secretKeyValue: RECAPTCHA_SECRET_KEY,
+      secretKeyTrimmed: RECAPTCHA_SECRET_KEY?.trim()
     });
     return false;
   }
@@ -30,7 +41,8 @@ export async function verifyRecaptcha(token: string, clientIP: string): Promise<
     logger.info('Verifying reCAPTCHA', { 
       clientIP, 
       tokenLength: token.length,
-      secretKeyLength: RECAPTCHA_SECRET_KEY.length 
+      secretKeyLength: RECAPTCHA_SECRET_KEY.length,
+      secretKeyPreview: RECAPTCHA_SECRET_KEY.substring(0, 10) + '...'
     });
 
     const response = await axios.post<RecaptchaResponse>(
