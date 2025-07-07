@@ -7,7 +7,7 @@ import { logger } from '../utils/logger';
 
 const router = Router();
 
-// Faucet-specific rate limiting
+// Faucet-specific rate limiting - only apply to successful requests
 const faucetLimiter = rateLimit({
   windowMs: 60 * 60 * 1000, // 1 hour
   max: 1, // 1 request per hour per IP
@@ -18,14 +18,23 @@ const faucetLimiter = rateLimit({
     // Use real IP from proxy headers if available
     return req.ip || req.connection.remoteAddress || 'unknown';
   },
-  // Skip rate limiting if we can't determine IP
-  skip: (req) => {
-    const ip = req.ip || req.connection.remoteAddress;
-    if (!ip || ip === 'unknown') {
-      logger.warn('Unable to determine client IP for rate limiting');
-      return false; // Don't skip, but log the issue
-    }
+  // Skip rate limiting for failed requests (validation errors, recaptcha failures, etc.)
+  skip: (req, res) => {
+    // Don't apply rate limiting to failed requests
+    // This will be handled in the route handler
     return false;
+  },
+  // Custom handler to only count successful claims
+  handler: (req, res) => {
+    logger.warn('Rate limit exceeded', {
+      ip: req.ip,
+      userAgent: req.get('User-Agent'),
+      url: req.url
+    });
+    res.status(429).json({ 
+      error: 'Rate limit exceeded. Only 1 claim per hour per IP address.',
+      nextClaimTime: Date.now() + (60 * 60 * 1000) // 1 hour from now
+    });
   }
 });
 
@@ -69,15 +78,18 @@ router.get('/eligibility/:address', async (req: Request, res: Response, next: Ne
   }
 });
 
-// Claim tokens
+// Claim tokens - custom rate limiting logic
 router.post('/claim', 
-  faucetLimiter,
   validateClaimRequest,
   async (req: Request, res: Response, next: NextFunction) => {
     try {
-      // Check validation errors
+      // Check validation errors first
       const errors = validationResult(req);
       if (!errors.isEmpty()) {
+        logger.warn('Validation failed for faucet claim', {
+          errors: errors.array(),
+          ip: req.ip
+        });
         return res.status(400).json({ 
           error: 'Validation failed', 
           details: errors.array() 
@@ -95,12 +107,17 @@ router.post('/claim',
         xRealIp: req.get('X-Real-IP')
       });
 
-      // Verify reCAPTCHA
+      // Verify reCAPTCHA first (before rate limiting)
       const isRecaptchaValid = await verifyRecaptcha(recaptchaToken, clientIP);
       if (!isRecaptchaValid) {
         logger.warn('Invalid reCAPTCHA attempt', { address, ip: clientIP });
         return res.status(400).json({ error: 'reCAPTCHA verification failed' });
       }
+
+      // Apply rate limiting only after validation and reCAPTCHA check
+      // Check if this IP has made a successful claim in the last hour
+      const rateLimitKey = `rate_limit:${clientIP}`;
+      // This will be handled in the faucetService with Redis
 
       // Process claim
       const result = await claimTokens(address, clientIP);

@@ -12,6 +12,16 @@ import { requestLogger } from './middleware/requestLogger';
 // Load environment variables
 dotenv.config();
 
+// Debug environment variables
+console.log('Environment check:', {
+  NODE_ENV: process.env.NODE_ENV,
+  PORT: process.env.PORT,
+  RECAPTCHA_SECRET_KEY_EXISTS: !!process.env.RECAPTCHA_SECRET_KEY,
+  RECAPTCHA_SECRET_KEY_LENGTH: process.env.RECAPTCHA_SECRET_KEY?.length || 0,
+  TRUST_PROXY: process.env.TRUST_PROXY,
+  REDIS_URL: process.env.REDIS_URL
+});
+
 // Initialize logger
 const logger = winston.createLogger({
   level: 'info',
@@ -34,7 +44,12 @@ const app = express();
 const PORT = process.env.PORT || 3001;
 
 // Trust proxy - IMPORTANT: Add this before any middleware that uses req.ip
-app.set('trust proxy', true);
+if (process.env.TRUST_PROXY === 'true') {
+  app.set('trust proxy', true);
+  logger.info('Trust proxy enabled');
+} else {
+  logger.info('Trust proxy disabled');
+}
 
 // Initialize Redis client
 export const redisClient = createClient({
@@ -86,7 +101,12 @@ app.get('/health', (req, res) => {
   res.json({ 
     status: 'ok', 
     timestamp: new Date().toISOString(),
-    uptime: process.uptime()
+    uptime: process.uptime(),
+    environment: {
+      NODE_ENV: process.env.NODE_ENV,
+      RECAPTCHA_CONFIGURED: !!process.env.RECAPTCHA_SECRET_KEY,
+      TRUST_PROXY: process.env.TRUST_PROXY
+    }
   });
 });
 
@@ -110,6 +130,10 @@ async function startServer() {
     // Start server
     app.listen(PORT, () => {
       logger.info(`Faucet backend server running on port ${PORT}`);
+      logger.info('Environment variables check:', {
+        RECAPTCHA_SECRET_KEY_EXISTS: !!process.env.RECAPTCHA_SECRET_KEY,
+        TRUST_PROXY: process.env.TRUST_PROXY
+      });
     });
   } catch (error) {
     logger.error('Failed to start server:', error);
