@@ -9,8 +9,18 @@ import { faucetRouter } from './routes/faucet';
 import { errorHandler } from './middleware/errorHandler';
 import { requestLogger } from './middleware/requestLogger';
 
-// Load environment variables FIRST
+// Load environment variables FIRST and ensure they're loaded
 dotenv.config();
+
+// Validate critical environment variables immediately
+const requiredEnvVars = ['RECAPTCHA_SECRET_KEY'];
+const missingEnvVars = requiredEnvVars.filter(varName => !process.env[varName]);
+
+if (missingEnvVars.length > 0) {
+  console.error('❌ Missing required environment variables:', missingEnvVars);
+  console.error('Please check your .env file and ensure all required variables are set.');
+  process.exit(1);
+}
 
 // Debug environment variables immediately after loading
 console.log('=== ENVIRONMENT VARIABLES DEBUG ===');
@@ -146,7 +156,7 @@ app.use('*', (req, res) => {
 
 async function startServer() {
   try {
-    // Validate required environment variables
+    // Final validation of required environment variables
     if (!process.env.RECAPTCHA_SECRET_KEY) {
       logger.error('RECAPTCHA_SECRET_KEY environment variable is required but not set');
       console.error('❌ RECAPTCHA_SECRET_KEY is missing!');

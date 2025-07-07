@@ -1,6 +1,7 @@
 import axios from 'axios';
 import { logger } from '../utils/logger';
 
+// Load the secret key at module level to ensure it's available
 const RECAPTCHA_SECRET_KEY = process.env.RECAPTCHA_SECRET_KEY;
 const RECAPTCHA_VERIFY_URL = 'https://www.google.com/recaptcha/api/siteverify';
 
@@ -12,46 +13,26 @@ interface RecaptchaResponse {
 }
 
 export async function verifyRecaptcha(token: string, clientIP: string): Promise<boolean> {
-  // Debug log untuk melihat nilai environment variable
-  console.log('=== RECAPTCHA DEBUG ===');
-  console.log('RECAPTCHA_SECRET_KEY exists:', !!RECAPTCHA_SECRET_KEY);
-  console.log('RECAPTCHA_SECRET_KEY length:', RECAPTCHA_SECRET_KEY?.length || 0);
-  console.log('RECAPTCHA_SECRET_KEY preview:', RECAPTCHA_SECRET_KEY?.substring(0, 10) + '...' || 'NOT_SET');
-  console.log('RECAPTCHA_SECRET_KEY type:', typeof RECAPTCHA_SECRET_KEY);
-  console.log('Token length:', token?.length || 0);
-  console.log('Client IP:', clientIP);
-  
-  // Test kondisi yang menyebabkan error
-  const isUndefined = RECAPTCHA_SECRET_KEY === undefined;
-  const isNull = RECAPTCHA_SECRET_KEY === null;
-  const isEmpty = RECAPTCHA_SECRET_KEY === '';
-  const isTrimEmpty = RECAPTCHA_SECRET_KEY?.trim() === '';
-  
-  console.log('Condition tests:');
-  console.log('- isUndefined:', isUndefined);
-  console.log('- isNull:', isNull);
-  console.log('- isEmpty:', isEmpty);
-  console.log('- isTrimEmpty:', isTrimEmpty);
-  console.log('- Overall condition result:', !RECAPTCHA_SECRET_KEY || RECAPTCHA_SECRET_KEY.trim() === '');
-  console.log('======================');
+  // Debug log for environment variable
+  logger.info('reCAPTCHA verification attempt', {
+    hasSecretKey: !!RECAPTCHA_SECRET_KEY,
+    secretKeyLength: RECAPTCHA_SECRET_KEY?.length || 0,
+    tokenLength: token?.length || 0,
+    clientIP
+  });
 
-  // Perbaiki kondisi - pastikan kita cek dengan benar
   if (!RECAPTCHA_SECRET_KEY) {
-    logger.error('reCAPTCHA secret key is undefined or null', {
+    logger.error('reCAPTCHA secret key is not configured', {
       envVarExists: !!process.env.RECAPTCHA_SECRET_KEY,
       envVarLength: process.env.RECAPTCHA_SECRET_KEY?.length || 0,
       allEnvKeys: Object.keys(process.env).filter(key => key.includes('RECAPTCHA')),
-      secretKeyValue: RECAPTCHA_SECRET_KEY,
-      secretKeyType: typeof RECAPTCHA_SECRET_KEY
+      nodeEnv: process.env.NODE_ENV
     });
     return false;
   }
 
   if (RECAPTCHA_SECRET_KEY.trim() === '') {
-    logger.error('reCAPTCHA secret key is empty after trim', {
-      originalLength: RECAPTCHA_SECRET_KEY.length,
-      trimmedLength: RECAPTCHA_SECRET_KEY.trim().length
-    });
+    logger.error('reCAPTCHA secret key is empty');
     return false;
   }
 
@@ -61,11 +42,10 @@ export async function verifyRecaptcha(token: string, clientIP: string): Promise<
   }
 
   try {
-    logger.info('Verifying reCAPTCHA', { 
+    logger.info('Sending reCAPTCHA verification request', { 
       clientIP, 
       tokenLength: token.length,
-      secretKeyLength: RECAPTCHA_SECRET_KEY.length,
-      secretKeyPreview: RECAPTCHA_SECRET_KEY.substring(0, 10) + '...'
+      secretKeyLength: RECAPTCHA_SECRET_KEY.length
     });
 
     const response = await axios.post<RecaptchaResponse>(
