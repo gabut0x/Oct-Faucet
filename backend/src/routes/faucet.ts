@@ -1,4 +1,4 @@
-import { Router } from 'express';
+import { Router, Request, Response, NextFunction } from 'express';
 import { body, validationResult } from 'express-validator';
 import rateLimit from 'express-rate-limit';
 import { claimTokens, getStats, checkEligibility } from '../services/faucetService';
@@ -35,7 +35,7 @@ const validateClaimRequest = [
 ];
 
 // Get faucet statistics
-router.get('/stats', async (req, res, next) => {
+router.get('/stats', async (req: Request, res: Response, next: NextFunction) => {
   try {
     const stats = await getStats();
     res.json(stats);
@@ -45,7 +45,7 @@ router.get('/stats', async (req, res, next) => {
 });
 
 // Check if address is eligible for claim
-router.get('/eligibility/:address', async (req, res, next) => {
+router.get('/eligibility/:address', async (req: Request, res: Response, next: NextFunction) => {
   try {
     const { address } = req.params;
     
@@ -64,7 +64,7 @@ router.get('/eligibility/:address', async (req, res, next) => {
 router.post('/claim', 
   faucetLimiter,
   validateClaimRequest,
-  async (req, res, next) => {
+  async (req: Request, res: Response, next: NextFunction) => {
     try {
       // Check validation errors
       const errors = validationResult(req);
