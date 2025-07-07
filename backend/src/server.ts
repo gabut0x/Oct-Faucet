@@ -12,16 +12,17 @@ import { requestLogger } from './middleware/requestLogger';
 // Load environment variables FIRST
 dotenv.config();
 
-// Debug environment variables
-console.log('Environment check:', {
-  NODE_ENV: process.env.NODE_ENV,
-  PORT: process.env.PORT,
-  RECAPTCHA_SECRET_KEY_EXISTS: !!process.env.RECAPTCHA_SECRET_KEY,
-  RECAPTCHA_SECRET_KEY_LENGTH: process.env.RECAPTCHA_SECRET_KEY?.length || 0,
-  RECAPTCHA_SECRET_KEY_PREVIEW: process.env.RECAPTCHA_SECRET_KEY?.substring(0, 10) + '...',
-  TRUST_PROXY: process.env.TRUST_PROXY,
-  REDIS_URL: process.env.REDIS_URL
-});
+// Debug environment variables immediately after loading
+console.log('=== ENVIRONMENT VARIABLES DEBUG ===');
+console.log('NODE_ENV:', process.env.NODE_ENV);
+console.log('PORT:', process.env.PORT);
+console.log('RECAPTCHA_SECRET_KEY exists:', !!process.env.RECAPTCHA_SECRET_KEY);
+console.log('RECAPTCHA_SECRET_KEY length:', process.env.RECAPTCHA_SECRET_KEY?.length || 0);
+console.log('RECAPTCHA_SECRET_KEY preview:', process.env.RECAPTCHA_SECRET_KEY?.substring(0, 10) + '...' || 'NOT_SET');
+console.log('TRUST_PROXY:', process.env.TRUST_PROXY);
+console.log('REDIS_URL:', process.env.REDIS_URL);
+console.log('All env keys containing RECAPTCHA:', Object.keys(process.env).filter(key => key.includes('RECAPTCHA')));
+console.log('=====================================');
 
 // Initialize logger
 const logger = winston.createLogger({
@@ -128,6 +129,9 @@ async function startServer() {
     // Validate required environment variables
     if (!process.env.RECAPTCHA_SECRET_KEY) {
       logger.error('RECAPTCHA_SECRET_KEY environment variable is required but not set');
+      console.error('❌ RECAPTCHA_SECRET_KEY is missing!');
+      console.error('Please check your .env file and make sure it contains:');
+      console.error('RECAPTCHA_SECRET_KEY=your-secret-key-here');
       process.exit(1);
     }
 
@@ -138,7 +142,9 @@ async function startServer() {
     // Start server
     app.listen(PORT, () => {
       logger.info(`Faucet backend server running on port ${PORT}`);
-      logger.info('Environment variables check:', {
+      console.log(`✅ Server started on port ${PORT}`);
+      console.log('✅ reCAPTCHA configured:', !!process.env.RECAPTCHA_SECRET_KEY);
+      console.log('Environment variables check:', {
         RECAPTCHA_SECRET_KEY_EXISTS: !!process.env.RECAPTCHA_SECRET_KEY,
         RECAPTCHA_SECRET_KEY_LENGTH: process.env.RECAPTCHA_SECRET_KEY?.length || 0,
         TRUST_PROXY: process.env.TRUST_PROXY

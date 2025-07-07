@@ -7,6 +7,11 @@
     "dev": "tsx watch src/server.ts",
     "build": "tsc",
     "start": "node dist/server.js",
+    "start:pm2": "pm2 start ecosystem.config.js",
+    "start:pm2:prod": "pm2 start ecosystem.config.js --env production",
+    "stop:pm2": "pm2 stop octra-faucet-backend",
+    "restart:pm2": "pm2 restart octra-faucet-backend",
+    "logs:pm2": "pm2 logs octra-faucet-backend",
     "lint": "eslint src/**/*.ts"
   },
   "dependencies": {
