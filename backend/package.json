@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "tsx watch src/server.ts",
     "dev:env": "tsx watch --env-file=.env src/server.ts",
+    "dev:debug": "tsx watch --inspect src/server.ts",
     "build": "tsc",
     "start": "node dist/server.js",
     "start:pm2": "pm2 start ecosystem.config.js",
@@ -14,7 +15,9 @@
     "restart:pm2": "pm2 restart octra-faucet-backend",
     "logs:pm2": "pm2 logs octra-faucet-backend",
     "lint": "eslint src/**/*.ts",
-    "generate-keys": "node ../generate-dev-keys.js"
+    "generate-keys": "node ../generate-dev-keys.js",
+    "debug-env": "node ../debug-env.js",
+    "fix-env": "node ../fix-env-issue.bat"
   },
   "dependencies": {
     "express": "^4.18.2",

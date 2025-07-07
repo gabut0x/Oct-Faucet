@@ -3,14 +3,57 @@ import cors from 'cors';
 import helmet from 'helmet';
 import rateLimit from 'express-rate-limit';
 import dotenv from 'dotenv';
+import path from 'path';
 import { createClient } from 'redis';
 import winston from 'winston';
 import { faucetRouter } from './routes/faucet';
 import { errorHandler } from './middleware/errorHandler';
 import { requestLogger } from './middleware/requestLogger';
 
-// Load environment variables FIRST and ensure they're loaded
-dotenv.config();
+// Load environment variables FIRST with explicit path
+const envPath = path.join(__dirname, '..', '.env');
+console.log('🔧 Loading .env from:', envPath);
+const envResult = dotenv.config({ path: envPath });
+
+if (envResult.error) {
+  console.error('❌ Error loading .env file:', envResult.error);
+  // Try alternative paths
+  const altPaths = [
+    path.join(process.cwd(), '.env'),
+    path.join(process.cwd(), 'backend', '.env'),
+    '.env'
+  ];
+  
+  for (const altPath of altPaths) {
+    console.log('🔄 Trying alternative path:', altPath);
+    const altResult = dotenv.config({ path: altPath });
+    if (!altResult.error) {
+      console.log('✅ Successfully loaded .env from:', altPath);
+      break;
+    }
+  }
+} else {
+  console.log('✅ Successfully loaded .env file');
+}
+
+// Debug environment variables immediately after loading
+console.log('=== ENVIRONMENT VARIABLES DEBUG ===');
+console.log('NODE_ENV:', process.env.NODE_ENV);
+console.log('PORT:', process.env.PORT);
+console.log('RECAPTCHA_SECRET_KEY exists:', !!process.env.RECAPTCHA_SECRET_KEY);
+console.log('RECAPTCHA_SECRET_KEY length:', process.env.RECAPTCHA_SECRET_KEY?.length || 0);
+console.log('RECAPTCHA_SECRET_KEY preview:', process.env.RECAPTCHA_SECRET_KEY?.substring(0, 10) + '...' || 'NOT_SET');
+console.log('FAUCET_ADDRESS:', process.env.FAUCET_ADDRESS);
+console.log('FAUCET_PRIVATE_KEY exists:', !!process.env.FAUCET_PRIVATE_KEY);
+console.log('FAUCET_PRIVATE_KEY length:', process.env.FAUCET_PRIVATE_KEY?.length || 0);
+console.log('FAUCET_PRIVATE_KEY preview:', process.env.FAUCET_PRIVATE_KEY?.substring(0, 10) + '...' || 'NOT_SET');
+console.log('FAUCET_PUBLIC_KEY exists:', !!process.env.FAUCET_PUBLIC_KEY);
+console.log('TRUST_PROXY:', process.env.TRUST_PROXY);
+console.log('REDIS_URL:', process.env.REDIS_URL);
+console.log('FRONTEND_URL:', process.env.FRONTEND_URL);
+console.log('All env keys containing RECAPTCHA:', Object.keys(process.env).filter(key => key.includes('RECAPTCHA')));
+console.log('All env keys containing FAUCET:', Object.keys(process.env).filter(key => key.includes('FAUCET')));
+console.log('=====================================');
 
 // Validate critical environment variables immediately
 const requiredEnvVars = [
@@ -30,25 +73,14 @@ if (missingEnvVars.length > 0) {
     const exists = !!process.env[varName];
     console.error(`  - ${varName}: ${exists ? '✅ SET' : '❌ MISSING'}`);
   });
+  
+  console.error('\n🔧 Quick fix suggestions:');
+  console.error('1. Run: node debug-env.js');
+  console.error('2. Run: quick-fix-env.bat');
+  console.error('3. Check if backend/.env file exists and contains the required variables');
+  
   process.exit(1);
 }
-
-// Debug environment variables immediately after loading
-console.log('=== ENVIRONMENT VARIABLES DEBUG ===');
-console.log('NODE_ENV:', process.env.NODE_ENV);
-console.log('PORT:', process.env.PORT);
-console.log('RECAPTCHA_SECRET_KEY exists:', !!process.env.RECAPTCHA_SECRET_KEY);
-console.log('RECAPTCHA_SECRET_KEY length:', process.env.RECAPTCHA_SECRET_KEY?.length || 0);
-console.log('RECAPTCHA_SECRET_KEY preview:', process.env.RECAPTCHA_SECRET_KEY?.substring(0, 10) + '...' || 'NOT_SET');
-console.log('FAUCET_ADDRESS:', process.env.FAUCET_ADDRESS);
-console.log('FAUCET_PRIVATE_KEY exists:', !!process.env.FAUCET_PRIVATE_KEY);
-console.log('FAUCET_PUBLIC_KEY exists:', !!process.env.FAUCET_PUBLIC_KEY);
-console.log('TRUST_PROXY:', process.env.TRUST_PROXY);
-console.log('REDIS_URL:', process.env.REDIS_URL);
-console.log('FRONTEND_URL:', process.env.FRONTEND_URL);
-console.log('All env keys containing RECAPTCHA:', Object.keys(process.env).filter(key => key.includes('RECAPTCHA')));
-console.log('All env keys containing FAUCET:', Object.keys(process.env).filter(key => key.includes('FAUCET')));
-console.log('=====================================');
 
 // Initialize logger
 const logger = winston.createLogger({
@@ -105,6 +137,7 @@ app.use(helmet({
 const allowedOrigins = [
   'https://oct-faucet.xme.my.id',
   'https://www.oct-faucet.xme.my.id',
+  'https://oct-faucet.local',
   'http://localhost:5173',
   'http://localhost:3000',
   'http://127.0.0.1:5173',
