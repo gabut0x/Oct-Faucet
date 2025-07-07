@@ -1,0 +1,45 @@
+# Caddyfile untuk development local
+# Pastikan domain ini ada di /etc/hosts
+
+# Frontend development server
+oct-faucet.local {
+    reverse_proxy localhost:5173
+    
+    # CORS headers untuk development
+    header {
+        Access-Control-Allow-Origin "https://api-oct-faucet.local"
+        Access-Control-Allow-Methods "GET, POST, PUT, DELETE, OPTIONS"
+        Access-Control-Allow-Headers "Content-Type, Authorization, X-Requested-With"
+        Access-Control-Allow-Credentials "true"
+    }
+}
+
+# Backend API server
+api-oct-faucet.local {
+    reverse_proxy localhost:3001
+    
+    # CORS headers
+    header {
+        Access-Control-Allow-Origin "https://oct-faucet.local"
+        Access-Control-Allow-Methods "GET, POST, PUT, DELETE, OPTIONS"
+        Access-Control-Allow-Headers "Content-Type, Authorization, X-Requested-With"
+        Access-Control-Allow-Credentials "true"
+    }
+    
+    # Handle preflight requests
+    @options {
+        method OPTIONS
+    }
+    respond @options 200 {
+        close
+    }
+}
+
+# Redirect HTTP to HTTPS untuk consistency
+http://oct-faucet.local {
+    redir https://oct-faucet.local{uri}
+}
+
+http://api-oct-faucet.local {
+    redir https://api-oct-faucet.local{uri}
+}
