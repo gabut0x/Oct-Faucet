@@ -21,6 +21,7 @@ console.log('RECAPTCHA_SECRET_KEY length:', process.env.RECAPTCHA_SECRET_KEY?.le
 console.log('RECAPTCHA_SECRET_KEY preview:', process.env.RECAPTCHA_SECRET_KEY?.substring(0, 10) + '...' || 'NOT_SET');
 console.log('TRUST_PROXY:', process.env.TRUST_PROXY);
 console.log('REDIS_URL:', process.env.REDIS_URL);
+console.log('FRONTEND_URL:', process.env.FRONTEND_URL);
 console.log('All env keys containing RECAPTCHA:', Object.keys(process.env).filter(key => key.includes('RECAPTCHA')));
 console.log('=====================================');
 
@@ -75,10 +76,28 @@ app.use(helmet({
   }
 }));
 
-// CORS configuration
+// CORS configuration - FIXED: Single origin configuration
+const allowedOrigins = [
+  process.env.FRONTEND_URL || 'http://localhost:5173',
+  'https://oct-faucet.xme.my.id',
+  'http://localhost:5173'
+];
+
 app.use(cors({
-  origin: process.env.FRONTEND_URL || 'http://localhost:5173',
-  credentials: true
+  origin: function (origin, callback) {
+    // Allow requests with no origin (like mobile apps or curl requests)
+    if (!origin) return callback(null, true);
+    
+    if (allowedOrigins.indexOf(origin) !== -1) {
+      callback(null, true);
+    } else {
+      logger.warn('CORS blocked origin:', origin);
+      callback(new Error('Not allowed by CORS'));
+    }
+  },
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With']
 }));
 
 // Rate limiting - moved after trust proxy setting
@@ -108,7 +127,8 @@ app.get('/health', (req, res) => {
       NODE_ENV: process.env.NODE_ENV,
       RECAPTCHA_CONFIGURED: !!process.env.RECAPTCHA_SECRET_KEY,
       RECAPTCHA_KEY_LENGTH: process.env.RECAPTCHA_SECRET_KEY?.length || 0,
-      TRUST_PROXY: process.env.TRUST_PROXY
+      TRUST_PROXY: process.env.TRUST_PROXY,
+      FRONTEND_URL: process.env.FRONTEND_URL
     }
   });
 });
@@ -144,10 +164,12 @@ async function startServer() {
       logger.info(`Faucet backend server running on port ${PORT}`);
       console.log(`✅ Server started on port ${PORT}`);
       console.log('✅ reCAPTCHA configured:', !!process.env.RECAPTCHA_SECRET_KEY);
+      console.log('✅ CORS origins:', allowedOrigins);
       console.log('Environment variables check:', {
         RECAPTCHA_SECRET_KEY_EXISTS: !!process.env.RECAPTCHA_SECRET_KEY,
         RECAPTCHA_SECRET_KEY_LENGTH: process.env.RECAPTCHA_SECRET_KEY?.length || 0,
-        TRUST_PROXY: process.env.TRUST_PROXY
+        TRUST_PROXY: process.env.TRUST_PROXY,
+        FRONTEND_URL: process.env.FRONTEND_URL
       });
     });
   } catch (error) {
