@@ -13,9 +13,7 @@ import {
   CheckCircle, 
   AlertTriangle,
   ExternalLink,
-  Copy,
-  Github,
-  Twitter
+  Copy
 } from 'lucide-react';
 import ReCAPTCHA from 'react-google-recaptcha';
 import { ThemeToggle } from './ThemeToggle';
@@ -338,73 +336,6 @@ export function FaucetPage() {
                     <span className="text-sm">{new Date(stats.lastClaim).toLocaleTimeString()}</span>
                   </div>
                 )}
-              </CardContent>
-            </Card>
-
-            {/* Info Card */}
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-lg">How it Works</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-3 text-sm">
-                <div className="flex items-start space-x-2">
-                  <div className="w-6 h-6 rounded-full bg-blue-100 dark:bg-blue-900 flex items-center justify-center flex-shrink-0 mt-0.5">
-                    <span className="text-xs font-medium text-blue-600 dark:text-blue-400">1</span>
-                  </div>
-                  <p>Enter your Octra wallet address</p>
-                </div>
-                <div className="flex items-start space-x-2">
-                  <div className="w-6 h-6 rounded-full bg-blue-100 dark:bg-blue-900 flex items-center justify-center flex-shrink-0 mt-0.5">
-                    <span className="text-xs font-medium text-blue-600 dark:text-blue-400">2</span>
-                  </div>
-                  <p>Complete the reCAPTCHA verification</p>
-                </div>
-                <div className="flex items-start space-x-2">
-                  <div className="w-6 h-6 rounded-full bg-blue-100 dark:bg-blue-900 flex items-center justify-center flex-shrink-0 mt-0.5">
-                    <span className="text-xs font-medium text-blue-600 dark:text-blue-400">3</span>
-                  </div>
-                  <p>Receive 10 OCT tokens instantly</p>
-                </div>
-                <div className="flex items-start space-x-2">
-                  <div className="w-6 h-6 rounded-full bg-blue-100 dark:bg-blue-900 flex items-center justify-center flex-shrink-0 mt-0.5">
-                    <span className="text-xs font-medium text-blue-600 dark:text-blue-400">4</span>
-                  </div>
-                  <p>Wait 24 hours before claiming again</p>
-                </div>
-              </CardContent>
-            </Card>
-
-            {/* Links Card */}
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-lg">Useful Links</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-3">
-                <a
-                  href="https://octrascan.io"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="flex items-center space-x-2 text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300 transition-colors"
-                >
-                  <ExternalLink className="h-4 w-4" />
-                  <span>OctraScan Explorer</span>
-                </a>
-                <a
-                  href="https://octra.network"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="flex items-center space-x-2 text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300 transition-colors"
-                >
-                  <ExternalLink className="h-4 w-4" />
-                  <span>Octra Network</span>
-                </a>
-                <a
-                  href="#"
-                  className="flex items-center space-x-2 text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300 transition-colors"
-                >
-                  <Github className="h-4 w-4" />
-                  <span>Source Code</span>
-                </a>
               </CardContent>
             </Card>
           </div>
