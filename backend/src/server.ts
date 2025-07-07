@@ -33,6 +33,9 @@ const logger = winston.createLogger({
 const app = express();
 const PORT = process.env.PORT || 3001;
 
+// Trust proxy - IMPORTANT: Add this before any middleware that uses req.ip
+app.set('trust proxy', true);
+
 // Initialize Redis client
 export const redisClient = createClient({
   url: process.env.REDIS_URL || 'redis://localhost:6379'
@@ -61,13 +64,17 @@ app.use(cors({
   credentials: true
 }));
 
-// Rate limiting
+// Rate limiting - moved after trust proxy setting
 const globalLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
   max: 100, // Limit each IP to 100 requests per windowMs
   message: 'Too many requests from this IP, please try again later.',
   standardHeaders: true,
-  legacyHeaders: false
+  legacyHeaders: false,
+  // Custom key generator to handle proxy properly
+  keyGenerator: (req) => {
+    return req.ip || req.connection.remoteAddress || 'unknown';
+  }
 });
 
 app.use(globalLimiter);

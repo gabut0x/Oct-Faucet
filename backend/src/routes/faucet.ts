@@ -17,6 +17,15 @@ const faucetLimiter = rateLimit({
   keyGenerator: (req) => {
     // Use real IP from proxy headers if available
     return req.ip || req.connection.remoteAddress || 'unknown';
+  },
+  // Skip rate limiting if we can't determine IP
+  skip: (req) => {
+    const ip = req.ip || req.connection.remoteAddress;
+    if (!ip || ip === 'unknown') {
+      logger.warn('Unable to determine client IP for rate limiting');
+      return false; // Don't skip, but log the issue
+    }
+    return false;
   }
 });
 
@@ -81,7 +90,9 @@ router.post('/claim',
       logger.info('Faucet claim attempt', { 
         address, 
         ip: clientIP,
-        userAgent: req.get('User-Agent')
+        userAgent: req.get('User-Agent'),
+        xForwardedFor: req.get('X-Forwarded-For'),
+        xRealIp: req.get('X-Real-IP')
       });
 
       // Verify reCAPTCHA
