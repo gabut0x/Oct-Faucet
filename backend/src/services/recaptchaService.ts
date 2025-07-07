@@ -1,8 +1,6 @@
 import axios from 'axios';
 import { logger } from '../utils/logger';
 
-// Load the secret key at module level to ensure it's available
-const RECAPTCHA_SECRET_KEY = process.env.RECAPTCHA_SECRET_KEY;
 const RECAPTCHA_VERIFY_URL = 'https://www.google.com/recaptcha/api/siteverify';
 
 interface RecaptchaResponse {
@@ -13,12 +11,17 @@ interface RecaptchaResponse {
 }
 
 export async function verifyRecaptcha(token: string, clientIP: string): Promise<boolean> {
+  // Always get the secret key from process.env at runtime to avoid module loading issues
+  const RECAPTCHA_SECRET_KEY = process.env.RECAPTCHA_SECRET_KEY;
+  
   // Debug log for environment variable
   logger.info('reCAPTCHA verification attempt', {
     hasSecretKey: !!RECAPTCHA_SECRET_KEY,
     secretKeyLength: RECAPTCHA_SECRET_KEY?.length || 0,
     tokenLength: token?.length || 0,
-    clientIP
+    clientIP,
+    processEnvExists: !!process.env.RECAPTCHA_SECRET_KEY,
+    processEnvLength: process.env.RECAPTCHA_SECRET_KEY?.length || 0
   });
 
   if (!RECAPTCHA_SECRET_KEY) {
@@ -26,7 +29,9 @@ export async function verifyRecaptcha(token: string, clientIP: string): Promise<
       envVarExists: !!process.env.RECAPTCHA_SECRET_KEY,
       envVarLength: process.env.RECAPTCHA_SECRET_KEY?.length || 0,
       allEnvKeys: Object.keys(process.env).filter(key => key.includes('RECAPTCHA')),
-      nodeEnv: process.env.NODE_ENV
+      nodeEnv: process.env.NODE_ENV,
+      secretKeyValue: RECAPTCHA_SECRET_KEY,
+      processEnvValue: process.env.RECAPTCHA_SECRET_KEY
     });
     return false;
   }
@@ -45,7 +50,8 @@ export async function verifyRecaptcha(token: string, clientIP: string): Promise<
     logger.info('Sending reCAPTCHA verification request', { 
       clientIP, 
       tokenLength: token.length,
-      secretKeyLength: RECAPTCHA_SECRET_KEY.length
+      secretKeyLength: RECAPTCHA_SECRET_KEY.length,
+      secretKeyPreview: RECAPTCHA_SECRET_KEY.substring(0, 10) + '...'
     });
 
     const response = await axios.post<RecaptchaResponse>(
