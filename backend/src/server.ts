@@ -101,29 +101,71 @@ app.use(helmet({
   }
 }));
 
-// CORS configuration - FIXED: Single origin configuration
+// CORS configuration - FIXED: Proper configuration for production
 const allowedOrigins = [
-  process.env.FRONTEND_URL || 'http://localhost:5173',
   'https://oct-faucet.xme.my.id',
-  'http://localhost:5173'
+  'https://www.oct-faucet.xme.my.id',
+  'http://localhost:5173',
+  'http://localhost:3000',
+  'http://127.0.0.1:5173',
+  'http://127.0.0.1:3000'
 ];
+
+// Add environment-specific origins
+if (process.env.FRONTEND_URL) {
+  allowedOrigins.push(process.env.FRONTEND_URL);
+}
+
+console.log('🌐 Allowed CORS origins:', allowedOrigins);
 
 app.use(cors({
   origin: function (origin, callback) {
-    // Allow requests with no origin (like mobile apps or curl requests)
-    if (!origin) return callback(null, true);
+    // Allow requests with no origin (like mobile apps, curl, Postman, etc.)
+    if (!origin) {
+      console.log('✅ CORS: Allowing request with no origin');
+      return callback(null, true);
+    }
     
-    if (allowedOrigins.indexOf(origin) !== -1) {
+    console.log('🔍 CORS: Checking origin:', origin);
+    
+    if (allowedOrigins.includes(origin)) {
+      console.log('✅ CORS: Origin allowed:', origin);
       callback(null, true);
     } else {
+      console.log('❌ CORS: Origin blocked:', origin);
       logger.warn('CORS blocked origin:', origin);
       callback(new Error('Not allowed by CORS'));
     }
   },
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With']
+  allowedHeaders: [
+    'Content-Type', 
+    'Authorization', 
+    'X-Requested-With',
+    'Accept',
+    'Origin',
+    'Access-Control-Request-Method',
+    'Access-Control-Request-Headers'
+  ],
+  exposedHeaders: ['Content-Length', 'X-Foo', 'X-Bar'],
+  maxAge: 86400 // 24 hours
 }));
+
+// Add explicit OPTIONS handler for preflight requests
+app.options('*', (req, res) => {
+  console.log('🔄 Handling preflight OPTIONS request for:', req.path);
+  console.log('🔄 Origin:', req.get('Origin'));
+  console.log('🔄 Access-Control-Request-Method:', req.get('Access-Control-Request-Method'));
+  console.log('🔄 Access-Control-Request-Headers:', req.get('Access-Control-Request-Headers'));
+  
+  res.header('Access-Control-Allow-Origin', req.get('Origin') || '*');
+  res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+  res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With, Accept, Origin, Access-Control-Request-Method, Access-Control-Request-Headers');
+  res.header('Access-Control-Allow-Credentials', 'true');
+  res.header('Access-Control-Max-Age', '86400');
+  res.sendStatus(200);
+});
 
 // Rate limiting - moved after trust proxy setting
 const globalLimiter = rateLimit({
@@ -155,7 +197,8 @@ app.get('/health', (req, res) => {
       FAUCET_CONFIGURED: !!(process.env.FAUCET_ADDRESS && process.env.FAUCET_PRIVATE_KEY && process.env.FAUCET_PUBLIC_KEY),
       FAUCET_ADDRESS: process.env.FAUCET_ADDRESS,
       TRUST_PROXY: process.env.TRUST_PROXY,
-      FRONTEND_URL: process.env.FRONTEND_URL
+      FRONTEND_URL: process.env.FRONTEND_URL,
+      CORS_ORIGINS: allowedOrigins
     }
   });
 });
