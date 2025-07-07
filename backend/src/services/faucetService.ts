@@ -2,7 +2,7 @@ import { redisClient } from '../server';
 import { createTransaction, sendTransaction, fetchFaucetBalance } from '../utils/blockchain';
 import { logger } from '../utils/logger';
 
-const FAUCET_AMOUNT = 10;
+const FAUCET_AMOUNT = 0.5;
 const ADDRESS_COOLDOWN = 24 * 60 * 60; // 24 hours in seconds
 const IP_COOLDOWN = 60 * 60; // 1 hour in seconds
 

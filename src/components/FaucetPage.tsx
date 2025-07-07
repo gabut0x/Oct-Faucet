@@ -8,7 +8,6 @@ import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { 
   Droplets, 
-  Clock, 
   Shield, 
   CheckCircle, 
   AlertTriangle,
@@ -99,12 +98,12 @@ export function FaucetPage() {
         setLastTxHash(result.txHash || null);
         toast({
           title: "Success!",
-          description: `Successfully sent 10 OCT to your address. Transaction hash: ${result.txHash?.slice(0, 16)}...`,
+          description: `Successfully sent 0.5 OCT to your address. Transaction hash: ${result.txHash?.slice(0, 16)}...`,
         });
         
         // Update stats
         setStats(prev => ({
-          totalClaimed: prev.totalClaimed + 10,
+          totalClaimed: prev.totalClaimed + 0.5,
           totalUsers: prev.totalUsers + 1,
           lastClaim: new Date().toISOString()
         }));
@@ -200,18 +199,10 @@ export function FaucetPage() {
                   Claim Free OCT
                 </CardTitle>
                 <p className="text-muted-foreground">
-                  Get 10 OCT tokens for testing on the Octra blockchain
+                  Get 0.5 OCT tokens for testing on the Octra blockchain
                 </p>
               </CardHeader>
               <CardContent className="space-y-6">
-                {/* Rate Limiting Info */}
-                <Alert>
-                  <Clock className="h-4 w-4" />
-                  <AlertDescription>
-                    <strong>Rate Limits:</strong> 1 claim per address every 24 hours • 1 claim per IP every hour
-                  </AlertDescription>
-                </Alert>
-
                 {/* Address Input */}
                 <div className="space-y-2">
                   <Label htmlFor="address">Octra Address</Label>
@@ -263,7 +254,7 @@ export function FaucetPage() {
                   ) : (
                     <>
                       <Droplets className="h-4 w-4 mr-2" />
-                      Claim 10 OCT
+                      Claim 0.5 OCT
                     </>
                   )}
                 </Button>
@@ -328,7 +319,7 @@ export function FaucetPage() {
                 </div>
                 <div className="flex justify-between">
                   <span className="text-muted-foreground">Amount per Claim:</span>
-                  <span className="font-mono font-medium">10 OCT</span>
+                  <span className="font-mono font-medium">0.5 OCT</span>
                 </div>
                 {stats.lastClaim && (
                   <div className="flex justify-between">
