@@ -9,7 +9,7 @@ import { faucetRouter } from './routes/faucet';
 import { errorHandler } from './middleware/errorHandler';
 import { requestLogger } from './middleware/requestLogger';
 
-// Load environment variables
+// Load environment variables FIRST
 dotenv.config();
 
 // Debug environment variables
@@ -18,6 +18,7 @@ console.log('Environment check:', {
   PORT: process.env.PORT,
   RECAPTCHA_SECRET_KEY_EXISTS: !!process.env.RECAPTCHA_SECRET_KEY,
   RECAPTCHA_SECRET_KEY_LENGTH: process.env.RECAPTCHA_SECRET_KEY?.length || 0,
+  RECAPTCHA_SECRET_KEY_PREVIEW: process.env.RECAPTCHA_SECRET_KEY?.substring(0, 10) + '...',
   TRUST_PROXY: process.env.TRUST_PROXY,
   REDIS_URL: process.env.REDIS_URL
 });
@@ -105,6 +106,7 @@ app.get('/health', (req, res) => {
     environment: {
       NODE_ENV: process.env.NODE_ENV,
       RECAPTCHA_CONFIGURED: !!process.env.RECAPTCHA_SECRET_KEY,
+      RECAPTCHA_KEY_LENGTH: process.env.RECAPTCHA_SECRET_KEY?.length || 0,
       TRUST_PROXY: process.env.TRUST_PROXY
     }
   });
@@ -123,6 +125,12 @@ app.use('*', (req, res) => {
 
 async function startServer() {
   try {
+    // Validate required environment variables
+    if (!process.env.RECAPTCHA_SECRET_KEY) {
+      logger.error('RECAPTCHA_SECRET_KEY environment variable is required but not set');
+      process.exit(1);
+    }
+
     // Connect to Redis
     await redisClient.connect();
     logger.info('Connected to Redis');
@@ -132,6 +140,7 @@ async function startServer() {
       logger.info(`Faucet backend server running on port ${PORT}`);
       logger.info('Environment variables check:', {
         RECAPTCHA_SECRET_KEY_EXISTS: !!process.env.RECAPTCHA_SECRET_KEY,
+        RECAPTCHA_SECRET_KEY_LENGTH: process.env.RECAPTCHA_SECRET_KEY?.length || 0,
         TRUST_PROXY: process.env.TRUST_PROXY
       });
     });
