@@ -13,12 +13,23 @@ import { requestLogger } from './middleware/requestLogger';
 dotenv.config();
 
 // Validate critical environment variables immediately
-const requiredEnvVars = ['RECAPTCHA_SECRET_KEY'];
+const requiredEnvVars = [
+  'RECAPTCHA_SECRET_KEY',
+  'FAUCET_PRIVATE_KEY',
+  'FAUCET_PUBLIC_KEY',
+  'FAUCET_ADDRESS'
+];
+
 const missingEnvVars = requiredEnvVars.filter(varName => !process.env[varName]);
 
 if (missingEnvVars.length > 0) {
   console.error('❌ Missing required environment variables:', missingEnvVars);
   console.error('Please check your .env file and ensure all required variables are set.');
+  console.error('Required variables:');
+  requiredEnvVars.forEach(varName => {
+    const exists = !!process.env[varName];
+    console.error(`  - ${varName}: ${exists ? '✅ SET' : '❌ MISSING'}`);
+  });
   process.exit(1);
 }
 
@@ -29,10 +40,14 @@ console.log('PORT:', process.env.PORT);
 console.log('RECAPTCHA_SECRET_KEY exists:', !!process.env.RECAPTCHA_SECRET_KEY);
 console.log('RECAPTCHA_SECRET_KEY length:', process.env.RECAPTCHA_SECRET_KEY?.length || 0);
 console.log('RECAPTCHA_SECRET_KEY preview:', process.env.RECAPTCHA_SECRET_KEY?.substring(0, 10) + '...' || 'NOT_SET');
+console.log('FAUCET_ADDRESS:', process.env.FAUCET_ADDRESS);
+console.log('FAUCET_PRIVATE_KEY exists:', !!process.env.FAUCET_PRIVATE_KEY);
+console.log('FAUCET_PUBLIC_KEY exists:', !!process.env.FAUCET_PUBLIC_KEY);
 console.log('TRUST_PROXY:', process.env.TRUST_PROXY);
 console.log('REDIS_URL:', process.env.REDIS_URL);
 console.log('FRONTEND_URL:', process.env.FRONTEND_URL);
 console.log('All env keys containing RECAPTCHA:', Object.keys(process.env).filter(key => key.includes('RECAPTCHA')));
+console.log('All env keys containing FAUCET:', Object.keys(process.env).filter(key => key.includes('FAUCET')));
 console.log('=====================================');
 
 // Initialize logger
@@ -137,6 +152,8 @@ app.get('/health', (req, res) => {
       NODE_ENV: process.env.NODE_ENV,
       RECAPTCHA_CONFIGURED: !!process.env.RECAPTCHA_SECRET_KEY,
       RECAPTCHA_KEY_LENGTH: process.env.RECAPTCHA_SECRET_KEY?.length || 0,
+      FAUCET_CONFIGURED: !!(process.env.FAUCET_ADDRESS && process.env.FAUCET_PRIVATE_KEY && process.env.FAUCET_PUBLIC_KEY),
+      FAUCET_ADDRESS: process.env.FAUCET_ADDRESS,
       TRUST_PROXY: process.env.TRUST_PROXY,
       FRONTEND_URL: process.env.FRONTEND_URL
     }
@@ -165,6 +182,14 @@ async function startServer() {
       process.exit(1);
     }
 
+    if (!process.env.FAUCET_ADDRESS) {
+      logger.error('FAUCET_ADDRESS environment variable is required but not set');
+      console.error('❌ FAUCET_ADDRESS is missing!');
+      console.error('Please check your .env file and make sure it contains:');
+      console.error('FAUCET_ADDRESS=oct1234567890abcdef');
+      process.exit(1);
+    }
+
     // Connect to Redis
     await redisClient.connect();
     logger.info('Connected to Redis');
@@ -174,10 +199,14 @@ async function startServer() {
       logger.info(`Faucet backend server running on port ${PORT}`);
       console.log(`✅ Server started on port ${PORT}`);
       console.log('✅ reCAPTCHA configured:', !!process.env.RECAPTCHA_SECRET_KEY);
+      console.log('✅ Faucet configured:', !!(process.env.FAUCET_ADDRESS && process.env.FAUCET_PRIVATE_KEY && process.env.FAUCET_PUBLIC_KEY));
       console.log('✅ CORS origins:', allowedOrigins);
       console.log('Environment variables check:', {
         RECAPTCHA_SECRET_KEY_EXISTS: !!process.env.RECAPTCHA_SECRET_KEY,
         RECAPTCHA_SECRET_KEY_LENGTH: process.env.RECAPTCHA_SECRET_KEY?.length || 0,
+        FAUCET_ADDRESS: process.env.FAUCET_ADDRESS,
+        FAUCET_PRIVATE_KEY_EXISTS: !!process.env.FAUCET_PRIVATE_KEY,
+        FAUCET_PUBLIC_KEY_EXISTS: !!process.env.FAUCET_PUBLIC_KEY,
         TRUST_PROXY: process.env.TRUST_PROXY,
         FRONTEND_URL: process.env.FRONTEND_URL
       });

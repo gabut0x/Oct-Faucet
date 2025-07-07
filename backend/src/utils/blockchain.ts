@@ -3,10 +3,35 @@ import axios from 'axios';
 import { logger } from './logger';
 
 const MU_FACTOR = 1_000_000;
-const FAUCET_PRIVATE_KEY = process.env.FAUCET_PRIVATE_KEY!;
-const FAUCET_PUBLIC_KEY = process.env.FAUCET_PUBLIC_KEY!;
-const FAUCET_ADDRESS = process.env.FAUCET_ADDRESS!;
+
+// Get environment variables with validation
+const FAUCET_PRIVATE_KEY = process.env.FAUCET_PRIVATE_KEY;
+const FAUCET_PUBLIC_KEY = process.env.FAUCET_PUBLIC_KEY;
+const FAUCET_ADDRESS = process.env.FAUCET_ADDRESS;
 const OCTRA_RPC_URL = process.env.OCTRA_RPC_URL || 'https://octra.network';
+
+// Validate required environment variables
+if (!FAUCET_PRIVATE_KEY) {
+  logger.error('FAUCET_PRIVATE_KEY environment variable is required');
+  throw new Error('FAUCET_PRIVATE_KEY is not configured');
+}
+
+if (!FAUCET_PUBLIC_KEY) {
+  logger.error('FAUCET_PUBLIC_KEY environment variable is required');
+  throw new Error('FAUCET_PUBLIC_KEY is not configured');
+}
+
+if (!FAUCET_ADDRESS) {
+  logger.error('FAUCET_ADDRESS environment variable is required');
+  throw new Error('FAUCET_ADDRESS is not configured');
+}
+
+logger.info('Blockchain configuration loaded', {
+  hasFaucetPrivateKey: !!FAUCET_PRIVATE_KEY,
+  hasFaucetPublicKey: !!FAUCET_PUBLIC_KEY,
+  faucetAddress: FAUCET_ADDRESS,
+  octraRpcUrl: OCTRA_RPC_URL
+});
 
 interface Transaction {
   from: string;
@@ -65,6 +90,11 @@ export function createTransaction(
 
 export async function fetchFaucetBalance(): Promise<number> {
   try {
+    logger.info('Fetching faucet balance', { 
+      address: FAUCET_ADDRESS,
+      url: `${OCTRA_RPC_URL}/address/${FAUCET_ADDRESS}`
+    });
+
     const response = await axios.get(`${OCTRA_RPC_URL}/address/${FAUCET_ADDRESS}`, {
       timeout: 10000
     });
@@ -73,28 +103,50 @@ export async function fetchFaucetBalance(): Promise<number> {
       ? parseFloat(response.data.balance) 
       : (response.data.balance || 0);
     
+    logger.info('Faucet balance fetched successfully', { balance });
     return balance;
   } catch (error) {
-    logger.error('Failed to fetch faucet balance', { error });
+    logger.error('Failed to fetch faucet balance', { 
+      error,
+      address: FAUCET_ADDRESS,
+      url: `${OCTRA_RPC_URL}/address/${FAUCET_ADDRESS}`
+    });
     throw new Error('Unable to fetch faucet balance');
   }
 }
 
 export async function fetchFaucetNonce(): Promise<number> {
   try {
+    logger.info('Fetching faucet nonce', { 
+      address: FAUCET_ADDRESS,
+      url: `${OCTRA_RPC_URL}/address/${FAUCET_ADDRESS}`
+    });
+
     const response = await axios.get(`${OCTRA_RPC_URL}/address/${FAUCET_ADDRESS}`, {
       timeout: 10000
     });
     
-    return response.data.nonce || 0;
+    const nonce = response.data.nonce || 0;
+    logger.info('Faucet nonce fetched successfully', { nonce });
+    return nonce;
   } catch (error) {
-    logger.error('Failed to fetch faucet nonce', { error });
+    logger.error('Failed to fetch faucet nonce', { 
+      error,
+      address: FAUCET_ADDRESS,
+      url: `${OCTRA_RPC_URL}/address/${FAUCET_ADDRESS}`
+    });
     throw new Error('Unable to fetch faucet nonce');
   }
 }
 
 export async function sendTransaction(recipientAddress: string, amount: number): Promise<TransactionResult> {
   try {
+    logger.info('Starting transaction', { 
+      from: FAUCET_ADDRESS,
+      to: recipientAddress,
+      amount
+    });
+
     // Get current nonce
     const nonce = await fetchFaucetNonce();
     
@@ -107,6 +159,12 @@ export async function sendTransaction(recipientAddress: string, amount: number):
       FAUCET_PRIVATE_KEY,
       FAUCET_PUBLIC_KEY
     );
+
+    logger.info('Transaction created', { 
+      nonce: transaction.nonce,
+      amount: transaction.amount,
+      ou: transaction.ou
+    });
 
     // Send transaction
     const response = await axios.post(`${OCTRA_RPC_URL}/send-tx`, transaction, {
@@ -122,14 +180,17 @@ export async function sendTransaction(recipientAddress: string, amount: number):
       try {
         const data = JSON.parse(responseText);
         if (data.status === 'accepted') {
+          logger.info('Transaction successful', { hash: data.tx_hash });
           return { success: true, hash: data.tx_hash };
         }
       } catch {
         const hashMatch = responseText.match(/OK\s+([0-9a-fA-F]{64})/);
         if (hashMatch) {
+          logger.info('Transaction successful', { hash: hashMatch[1] });
           return { success: true, hash: hashMatch[1] };
         }
       }
+      logger.info('Transaction successful', { response: responseText });
       return { success: true, hash: responseText };
     }
 
