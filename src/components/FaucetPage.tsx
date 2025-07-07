@@ -39,8 +39,8 @@ export function FaucetPage() {
   const recaptchaRef = useRef<ReCAPTCHA>(null);
   const { toast } = useToast();
 
-  // Replace with your actual reCAPTCHA site key
-  const RECAPTCHA_SITE_KEY = "6LeIxAcTAAAAAJcZVRqyHh71UMIEGNQ_MXjiZKhI"; // Test key
+  // Use environment variable for reCAPTCHA site key
+  const RECAPTCHA_SITE_KEY = import.meta.env.VITE_RECAPTCHA_SITE_KEY;
 
   const validateAddress = (addr: string): boolean => {
     return addr.startsWith('oct') && addr.length > 10;
@@ -221,13 +221,24 @@ export function FaucetPage() {
                 </div>
 
                 {/* reCAPTCHA */}
-                <div className="flex justify-center">
-                  <ReCAPTCHA
-                    ref={recaptchaRef}
-                    sitekey={RECAPTCHA_SITE_KEY}
-                    theme="light"
-                  />
-                </div>
+                {RECAPTCHA_SITE_KEY && (
+                  <div className="flex justify-center">
+                    <ReCAPTCHA
+                      ref={recaptchaRef}
+                      sitekey={RECAPTCHA_SITE_KEY}
+                      theme="light"
+                    />
+                  </div>
+                )}
+
+                {!RECAPTCHA_SITE_KEY && (
+                  <Alert>
+                    <AlertTriangle className="h-4 w-4" />
+                    <AlertDescription>
+                      reCAPTCHA is not configured. Please set VITE_RECAPTCHA_SITE_KEY in your environment variables.
+                    </AlertDescription>
+                  </Alert>
+                )}
 
                 {/* Next Claim Timer */}
                 {timeUntilNextClaim && (
@@ -242,7 +253,7 @@ export function FaucetPage() {
                 {/* Claim Button */}
                 <Button 
                   onClick={handleClaim}
-                  disabled={isLoading || !address.trim()}
+                  disabled={isLoading || !address.trim() || !RECAPTCHA_SITE_KEY}
                   className="w-full"
                   size="lg"
                 >
