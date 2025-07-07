@@ -4,39 +4,49 @@ import { logger } from './logger';
 
 const MU_FACTOR = 1_000_000;
 
-// Get environment variables with validation
-const FAUCET_PRIVATE_KEY = process.env.FAUCET_PRIVATE_KEY;
-const FAUCET_PUBLIC_KEY = process.env.FAUCET_PUBLIC_KEY;
-const FAUCET_ADDRESS = process.env.FAUCET_ADDRESS;
-const OCTRA_RPC_URL = process.env.OCTRA_RPC_URL || 'https://octra.network';
-
-// Validate required environment variables
-if (!FAUCET_PRIVATE_KEY) {
-  logger.error('FAUCET_PRIVATE_KEY environment variable is required');
-  throw new Error('FAUCET_PRIVATE_KEY is not configured');
+interface FaucetConfig {
+  privateKey: string;
+  publicKey: string;
+  address: string;
+  rpcUrl: string;
 }
 
-if (!FAUCET_PUBLIC_KEY) {
-  logger.error('FAUCET_PUBLIC_KEY environment variable is required');
-  throw new Error('FAUCET_PUBLIC_KEY is not configured');
+let cachedConfig: FaucetConfig | null = null;
+
+function getFaucetConfig(): FaucetConfig {
+  if (cachedConfig) return cachedConfig;
+
+  const privateKey = process.env.FAUCET_PRIVATE_KEY;
+  const publicKey = process.env.FAUCET_PUBLIC_KEY;
+  const address = process.env.FAUCET_ADDRESS;
+  const rpcUrl = process.env.OCTRA_RPC_URL || 'https://octra.network';
+
+  if (!privateKey) {
+    logger.error('FAUCET_PRIVATE_KEY environment variable is required');
+    throw new Error('FAUCET_PRIVATE_KEY is not configured');
+  }
+
+  if (!publicKey) {
+    logger.error('FAUCET_PUBLIC_KEY environment variable is required');
+    throw new Error('FAUCET_PUBLIC_KEY is not configured');
+  }
+
+  if (!address) {
+    logger.error('FAUCET_ADDRESS environment variable is required');
+    throw new Error('FAUCET_ADDRESS is not configured');
+  }
+
+  cachedConfig = { privateKey, publicKey, address, rpcUrl };
+
+  logger.info('Blockchain configuration loaded', {
+    hasFaucetPrivateKey: true,
+    hasFaucetPublicKey: true,
+    faucetAddress: address,
+    octraRpcUrl: rpcUrl
+  });
+
+  return cachedConfig;
 }
-
-if (!FAUCET_ADDRESS) {
-  logger.error('FAUCET_ADDRESS environment variable is required');
-  throw new Error('FAUCET_ADDRESS is not configured');
-}
-
-// Type-safe constants after validation
-const VALIDATED_FAUCET_PRIVATE_KEY: string = FAUCET_PRIVATE_KEY;
-const VALIDATED_FAUCET_PUBLIC_KEY: string = FAUCET_PUBLIC_KEY;
-const VALIDATED_FAUCET_ADDRESS: string = FAUCET_ADDRESS;
-
-logger.info('Blockchain configuration loaded', {
-  hasFaucetPrivateKey: !!VALIDATED_FAUCET_PRIVATE_KEY,
-  hasFaucetPublicKey: !!VALIDATED_FAUCET_PUBLIC_KEY,
-  faucetAddress: VALIDATED_FAUCET_ADDRESS,
-  octraRpcUrl: OCTRA_RPC_URL
-});
 
 interface Transaction {
   from: string;
@@ -76,16 +86,14 @@ export function createTransaction(
     timestamp
   };
 
-  const txString = JSON.stringify(transaction, null, 0);
-  
   const privateKeyBuffer = Buffer.from(privateKeyBase64, 'base64');
   const publicKeyBuffer = Buffer.from(publicKeyHex, 'hex');
-  
+
   const secretKey = new Uint8Array(64);
   secretKey.set(privateKeyBuffer, 0);
   secretKey.set(publicKeyBuffer, 32);
 
-  const signature = nacl.sign.detached(new TextEncoder().encode(txString), secretKey);
+  const signature = nacl.sign.detached(new TextEncoder().encode(JSON.stringify(transaction)), secretKey);
 
   transaction.signature = Buffer.from(signature).toString('base64');
   transaction.public_key = Buffer.from(publicKeyBuffer).toString('base64');
@@ -94,85 +102,84 @@ export function createTransaction(
 }
 
 export async function fetchFaucetBalance(): Promise<number> {
+  const { address, rpcUrl } = getFaucetConfig();
+
   try {
-    logger.info('Fetching faucet balance', { 
-      address: VALIDATED_FAUCET_ADDRESS,
-      url: `${OCTRA_RPC_URL}/address/${VALIDATED_FAUCET_ADDRESS}`
+    logger.info('Fetching faucet balance', {
+      address,
+      url: `${rpcUrl}/address/${address}`
     });
 
-    const response = await axios.get(`${OCTRA_RPC_URL}/address/${VALIDATED_FAUCET_ADDRESS}`, {
-      timeout: 10000
-    });
-    
-    const balance = typeof response.data.balance === 'string' 
-      ? parseFloat(response.data.balance) 
+    const response = await axios.get(`${rpcUrl}/address/${address}`, { timeout: 10000 });
+
+    const balance = typeof response.data.balance === 'string'
+      ? parseFloat(response.data.balance)
       : (response.data.balance || 0);
-    
+
     logger.info('Faucet balance fetched successfully', { balance });
     return balance;
   } catch (error) {
-    logger.error('Failed to fetch faucet balance', { 
+    logger.error('Failed to fetch faucet balance', {
       error,
-      address: VALIDATED_FAUCET_ADDRESS,
-      url: `${OCTRA_RPC_URL}/address/${VALIDATED_FAUCET_ADDRESS}`
+      address,
+      url: `${rpcUrl}/address/${address}`
     });
     throw new Error('Unable to fetch faucet balance');
   }
 }
 
 export async function fetchFaucetNonce(): Promise<number> {
+  const { address, rpcUrl } = getFaucetConfig();
+
   try {
-    logger.info('Fetching faucet nonce', { 
-      address: VALIDATED_FAUCET_ADDRESS,
-      url: `${OCTRA_RPC_URL}/address/${VALIDATED_FAUCET_ADDRESS}`
+    logger.info('Fetching faucet nonce', {
+      address,
+      url: `${rpcUrl}/address/${address}`
     });
 
-    const response = await axios.get(`${OCTRA_RPC_URL}/address/${VALIDATED_FAUCET_ADDRESS}`, {
-      timeout: 10000
-    });
-    
+    const response = await axios.get(`${rpcUrl}/address/${address}`, { timeout: 10000 });
+
     const nonce = response.data.nonce || 0;
     logger.info('Faucet nonce fetched successfully', { nonce });
     return nonce;
   } catch (error) {
-    logger.error('Failed to fetch faucet nonce', { 
+    logger.error('Failed to fetch faucet nonce', {
       error,
-      address: VALIDATED_FAUCET_ADDRESS,
-      url: `${OCTRA_RPC_URL}/address/${VALIDATED_FAUCET_ADDRESS}`
+      address,
+      url: `${rpcUrl}/address/${address}`
     });
     throw new Error('Unable to fetch faucet nonce');
   }
 }
 
 export async function sendTransaction(recipientAddress: string, amount: number): Promise<TransactionResult> {
+  const { privateKey, publicKey, address, rpcUrl } = getFaucetConfig();
+
   try {
-    logger.info('Starting transaction', { 
-      from: VALIDATED_FAUCET_ADDRESS,
+    logger.info('Starting transaction', {
+      from: address,
       to: recipientAddress,
       amount
     });
 
-    // Get current nonce
     const nonce = await fetchFaucetNonce();
-    
-    // Create transaction
+
     const transaction = createTransaction(
-      VALIDATED_FAUCET_ADDRESS,
+      address,
       recipientAddress,
       amount,
       nonce + 1,
-      VALIDATED_FAUCET_PRIVATE_KEY,
-      VALIDATED_FAUCET_PUBLIC_KEY
+      privateKey,
+      publicKey
     );
 
-    logger.info('Transaction created', { 
+    logger.info('Transaction created', {
       nonce: transaction.nonce,
       amount: transaction.amount,
       ou: transaction.ou
     });
 
-    // Send transaction
-    const response = await axios.post(`${OCTRA_RPC_URL}/send-tx`, transaction, {
+    const response = await axios.post(`${rpcUrl}/send-tx`, transaction, {
       headers: {
         'Content-Type': 'application/json',
       },
@@ -195,6 +202,7 @@ export async function sendTransaction(recipientAddress: string, amount: number):
           return { success: true, hash: hashMatch[1] };
         }
       }
+
       logger.info('Transaction successful', { response: responseText });
       return { success: true, hash: responseText };
     }
@@ -203,9 +211,9 @@ export async function sendTransaction(recipientAddress: string, amount: number):
     return { success: false, error: responseText };
   } catch (error) {
     logger.error('Send transaction error', { error, recipientAddress, amount });
-    return { 
-      success: false, 
-      error: error instanceof Error ? error.message : 'Unknown error' 
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Unknown error'
     };
   }
 }

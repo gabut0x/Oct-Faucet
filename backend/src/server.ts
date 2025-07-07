@@ -1,14 +1,18 @@
+import 'dotenv/config'; // Harus baris paling atas
+import dotenv from 'dotenv';
+import path from 'path';
 import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
 import rateLimit from 'express-rate-limit';
-import dotenv from 'dotenv';
-import path from 'path';
 import { createClient } from 'redis';
 import winston from 'winston';
 import { faucetRouter } from './routes/faucet';
 import { errorHandler } from './middleware/errorHandler';
 import { requestLogger } from './middleware/requestLogger';
+
+dotenv.config();
+console.log('FAUCET_PRIVATE_KEY loaded?:', !!process.env.FAUCET_PRIVATE_KEY);
 
 // Load environment variables FIRST with explicit path
 const envPath = path.join(__dirname, '..', '.env');
@@ -151,54 +155,13 @@ if (process.env.FRONTEND_URL) {
 
 console.log('🌐 Allowed CORS origins:', allowedOrigins);
 
-app.use(cors({
-  origin: function (origin, callback) {
-    // Allow requests with no origin (like mobile apps, curl, Postman, etc.)
-    if (!origin) {
-      console.log('✅ CORS: Allowing request with no origin');
-      return callback(null, true);
-    }
-    
-    console.log('🔍 CORS: Checking origin:', origin);
-    
-    if (allowedOrigins.includes(origin)) {
-      console.log('✅ CORS: Origin allowed:', origin);
-      callback(null, true);
-    } else {
-      console.log('❌ CORS: Origin blocked:', origin);
-      logger.warn('CORS blocked origin:', origin);
-      callback(new Error('Not allowed by CORS'));
-    }
-  },
-  credentials: true,
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: [
-    'Content-Type', 
-    'Authorization', 
-    'X-Requested-With',
-    'Accept',
-    'Origin',
-    'Access-Control-Request-Method',
-    'Access-Control-Request-Headers'
-  ],
-  exposedHeaders: ['Content-Length', 'X-Foo', 'X-Bar'],
-  maxAge: 86400 // 24 hours
-}));
-
-// Add explicit OPTIONS handler for preflight requests
-app.options('*', (req, res) => {
-  console.log('🔄 Handling preflight OPTIONS request for:', req.path);
-  console.log('🔄 Origin:', req.get('Origin'));
-  console.log('🔄 Access-Control-Request-Method:', req.get('Access-Control-Request-Method'));
-  console.log('🔄 Access-Control-Request-Headers:', req.get('Access-Control-Request-Headers'));
-  
-  res.header('Access-Control-Allow-Origin', req.get('Origin') || '*');
-  res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
-  res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With, Accept, Origin, Access-Control-Request-Method, Access-Control-Request-Headers');
-  res.header('Access-Control-Allow-Credentials', 'true');
-  res.header('Access-Control-Max-Age', '86400');
-  res.sendStatus(200);
-});
+// app.use(cors({
+//   origin: function (origin, callback) {
+//     console.log('🛰️  CORS origin:', origin);
+//     callback(null, true); // izinkan semua origin
+//   },
+//   credentials: true
+// }));
 
 // Rate limiting - moved after trust proxy setting
 const globalLimiter = rateLimit({
