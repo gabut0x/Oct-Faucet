@@ -17,17 +17,40 @@ export async function verifyRecaptcha(token: string, clientIP: string): Promise<
   console.log('RECAPTCHA_SECRET_KEY exists:', !!RECAPTCHA_SECRET_KEY);
   console.log('RECAPTCHA_SECRET_KEY length:', RECAPTCHA_SECRET_KEY?.length || 0);
   console.log('RECAPTCHA_SECRET_KEY preview:', RECAPTCHA_SECRET_KEY?.substring(0, 10) + '...' || 'NOT_SET');
+  console.log('RECAPTCHA_SECRET_KEY type:', typeof RECAPTCHA_SECRET_KEY);
   console.log('Token length:', token?.length || 0);
   console.log('Client IP:', clientIP);
+  
+  // Test kondisi yang menyebabkan error
+  const isUndefined = RECAPTCHA_SECRET_KEY === undefined;
+  const isNull = RECAPTCHA_SECRET_KEY === null;
+  const isEmpty = RECAPTCHA_SECRET_KEY === '';
+  const isTrimEmpty = RECAPTCHA_SECRET_KEY?.trim() === '';
+  
+  console.log('Condition tests:');
+  console.log('- isUndefined:', isUndefined);
+  console.log('- isNull:', isNull);
+  console.log('- isEmpty:', isEmpty);
+  console.log('- isTrimEmpty:', isTrimEmpty);
+  console.log('- Overall condition result:', !RECAPTCHA_SECRET_KEY || RECAPTCHA_SECRET_KEY.trim() === '');
   console.log('======================');
 
-  if (!RECAPTCHA_SECRET_KEY || RECAPTCHA_SECRET_KEY.trim() === '') {
-    logger.error('reCAPTCHA secret key not configured', {
+  // Perbaiki kondisi - pastikan kita cek dengan benar
+  if (!RECAPTCHA_SECRET_KEY) {
+    logger.error('reCAPTCHA secret key is undefined or null', {
       envVarExists: !!process.env.RECAPTCHA_SECRET_KEY,
       envVarLength: process.env.RECAPTCHA_SECRET_KEY?.length || 0,
       allEnvKeys: Object.keys(process.env).filter(key => key.includes('RECAPTCHA')),
       secretKeyValue: RECAPTCHA_SECRET_KEY,
-      secretKeyTrimmed: RECAPTCHA_SECRET_KEY?.trim()
+      secretKeyType: typeof RECAPTCHA_SECRET_KEY
+    });
+    return false;
+  }
+
+  if (RECAPTCHA_SECRET_KEY.trim() === '') {
+    logger.error('reCAPTCHA secret key is empty after trim', {
+      originalLength: RECAPTCHA_SECRET_KEY.length,
+      trimmedLength: RECAPTCHA_SECRET_KEY.trim().length
     });
     return false;
   }
