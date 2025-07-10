@@ -69,30 +69,23 @@ export function FaucetPage() {
   });
   const [isLoadingStats, setIsLoadingStats] = useState(true);
   const [isLoadingPrivateStats, setIsLoadingPrivateStats] = useState(true);
-  const [claimTimer, setClaimTimer] = useState<ClaimTimer>(() => {
-    // Load timer from localStorage on component mount
-    const savedTimer = localStorage.getItem(`faucet-timer-${activeTab}`);
-    if (savedTimer) {
-      try {
-        const parsed = JSON.parse(savedTimer);
-        const now = Math.floor(Date.now() / 1000);
-        if (parsed.nextClaimTime && parsed.nextClaimTime > now) {
-          return {
-            nextClaimTime: parsed.nextClaimTime,
-            timeRemaining: '',
-            isActive: true
-          };
-        }
-      } catch (error) {
-        console.error('Failed to parse saved timer:', error);
-      }
-    }
-    return {
-      nextClaimTime: null,
-      timeRemaining: '',
-      isActive: false
-    };
+  
+  // Separate timers for public and private faucets
+  const [publicTimer, setPublicTimer] = useState<ClaimTimer>({
+    nextClaimTime: null,
+    timeRemaining: '',
+    isActive: false
   });
+  
+  const [privateTimer, setPrivateTimer] = useState<ClaimTimer>({
+    nextClaimTime: null,
+    timeRemaining: '',
+    isActive: false
+  });
+  
+  // Get current timer based on active tab
+  const currentTimer = activeTab === 'public' ? publicTimer : privateTimer;
+  const setCurrentTimer = activeTab === 'public' ? setPublicTimer : setPrivateTimer;
   
   const recaptchaRef = useRef<ReCAPTCHA>(null);
   const { toast } = useToast();
@@ -100,70 +93,72 @@ export function FaucetPage() {
   // Use environment variable for reCAPTCHA site key
   const RECAPTCHA_SITE_KEY = import.meta.env.VITE_RECAPTCHA_SITE_KEY;
 
+  // Load timers from localStorage on component mount
+  useEffect(() => {
+    // Load public timer
+    const savedPublicTimer = localStorage.getItem('faucet-timer-public');
+    if (savedPublicTimer) {
+      try {
+        const parsed = JSON.parse(savedPublicTimer);
+        const now = Math.floor(Date.now() / 1000);
+        if (parsed.nextClaimTime && parsed.nextClaimTime > now) {
+          setPublicTimer({
+            nextClaimTime: parsed.nextClaimTime,
+            timeRemaining: '',
+            isActive: true
+          });
+        }
+      } catch (error) {
+        console.error('Failed to parse saved public timer:', error);
+      }
+    }
+    
+    // Load private timer
+    const savedPrivateTimer = localStorage.getItem('faucet-timer-private');
+    if (savedPrivateTimer) {
+      try {
+        const parsed = JSON.parse(savedPrivateTimer);
+        const now = Math.floor(Date.now() / 1000);
+        if (parsed.nextClaimTime && parsed.nextClaimTime > now) {
+          setPrivateTimer({
+            nextClaimTime: parsed.nextClaimTime,
+            timeRemaining: '',
+            isActive: true
+          });
+        }
+      } catch (error) {
+        console.error('Failed to parse saved private timer:', error);
+      }
+    }
+  }, []);
+
   // Load stats from server on component mount
   useEffect(() => {
     loadStatsFromServer();
     loadPrivateStatsFromServer();
   }, []);
 
-  // Update timer storage key when tab changes
-  useEffect(() => {
-    const savedTimer = localStorage.getItem(`faucet-timer-${activeTab}`);
-    if (savedTimer) {
-      try {
-        const parsed = JSON.parse(savedTimer);
-        const now = Math.floor(Date.now() / 1000);
-        if (parsed.nextClaimTime && parsed.nextClaimTime > now) {
-          setClaimTimer({
-            nextClaimTime: parsed.nextClaimTime,
-            timeRemaining: '',
-            isActive: true
-          });
-        } else {
-          setClaimTimer({
-            nextClaimTime: null,
-            timeRemaining: '',
-            isActive: false
-          });
-        }
-      } catch (error) {
-        console.error('Failed to parse saved timer:', error);
-        setClaimTimer({
-          nextClaimTime: null,
-          timeRemaining: '',
-          isActive: false
-        });
-      }
-    } else {
-      setClaimTimer({
-        nextClaimTime: null,
-        timeRemaining: '',
-        isActive: false
-      });
-    }
-  }, [activeTab]);
-
-  // Timer effect to update remaining time every second
+  // Timer effect for public faucet
   useEffect(() => {
     let interval: NodeJS.Timeout;
 
-    if (claimTimer.isActive && claimTimer.nextClaimTime) {
+    if (publicTimer.isActive && publicTimer.nextClaimTime) {
       interval = setInterval(() => {
         const now = Math.floor(Date.now() / 1000);
-        const timeLeft = claimTimer.nextClaimTime! - now;
+        const timeLeft = publicTimer.nextClaimTime! - now;
 
         if (timeLeft <= 0) {
-          setClaimTimer(prev => ({
+          setPublicTimer(prev => ({
             ...prev,
             isActive: false,
             timeRemaining: '',
             nextClaimTime: null
           }));
           // Clear from localStorage
-          localStorage.removeItem(`faucet-timer-${activeTab}`);
+          localStorage.removeItem('faucet-timer-public');
         } else {
           const timeString = formatTimeRemaining(timeLeft);
-          setClaimTimer(prev => ({
+          setPublicTimer(prev => ({
             ...prev,
             timeRemaining: timeString
           }));
@@ -176,16 +171,60 @@ export function FaucetPage() {
         clearInterval(interval);
       }
     };
-  }, [claimTimer.isActive, claimTimer.nextClaimTime, activeTab]);
+  }, [publicTimer.isActive, publicTimer.nextClaimTime]);
 
-  // Save timer to localStorage whenever it changes
+  // Timer effect for private faucet
   useEffect(() => {
-    if (claimTimer.nextClaimTime) {
-      localStorage.setItem(`faucet-timer-${activeTab}`, JSON.stringify({
-        nextClaimTime: claimTimer.nextClaimTime
+    let interval: NodeJS.Timeout;
+
+    if (privateTimer.isActive && privateTimer.nextClaimTime) {
+      interval = setInterval(() => {
+        const now = Math.floor(Date.now() / 1000);
+        const timeLeft = privateTimer.nextClaimTime! - now;
+
+        if (timeLeft <= 0) {
+          setPrivateTimer(prev => ({
+            ...prev,
+            isActive: false,
+            timeRemaining: '',
+            nextClaimTime: null
+          }));
+          // Clear from localStorage
+          localStorage.removeItem('faucet-timer-private');
+        } else {
+          const timeString = formatTimeRemaining(timeLeft);
+          setPrivateTimer(prev => ({
+            ...prev,
+            timeRemaining: timeString
+          }));
+        }
+      }, 1000);
+    }
+
+    return () => {
+      if (interval) {
+        clearInterval(interval);
+      }
+    };
+  }, [privateTimer.isActive, privateTimer.nextClaimTime]);
+
+  // Save public timer to localStorage whenever it changes
+  useEffect(() => {
+    if (publicTimer.nextClaimTime) {
+      localStorage.setItem('faucet-timer-public', JSON.stringify({
+        nextClaimTime: publicTimer.nextClaimTime
       }));
     }
-  }, [claimTimer.nextClaimTime, activeTab]);
+  }, [publicTimer.nextClaimTime]);
+
+  // Save private timer to localStorage whenever it changes
+  useEffect(() => {
+    if (privateTimer.nextClaimTime) {
+      localStorage.setItem('faucet-timer-private', JSON.stringify({
+        nextClaimTime: privateTimer.nextClaimTime
+      }));
+    }
+  }, [privateTimer.nextClaimTime]);
 
   const loadStatsFromServer = async () => {
     setIsLoadingStats(true);
@@ -287,11 +326,20 @@ export function FaucetPage() {
         
         // Set timer for next claim (24 hours)
         const nextClaimTime = Math.floor(Date.now() / 1000) + (24 * 60 * 60);
-        setClaimTimer({
-          nextClaimTime,
-          timeRemaining: formatTimeRemaining(24 * 60 * 60),
-          isActive: true
-        });
+        
+        if (activeTab === 'public') {
+          setPublicTimer({
+            nextClaimTime,
+            timeRemaining: formatTimeRemaining(24 * 60 * 60),
+            isActive: true
+          });
+        } else {
+          setPrivateTimer({
+            nextClaimTime,
+            timeRemaining: formatTimeRemaining(24 * 60 * 60),
+            isActive: true
+          });
+        }
         
         // Reset form
         setAddress('');
@@ -312,11 +360,21 @@ export function FaucetPage() {
         
         // If there's a nextClaimTime in the error response, set the timer
         if (result.nextClaimTime) {
-          setClaimTimer({
-            nextClaimTime: result.nextClaimTime,
-            timeRemaining: formatTimeRemaining(result.nextClaimTime - Math.floor(Date.now() / 1000)),
-            isActive: true
-          });
+          const timeRemaining = formatTimeRemaining(result.nextClaimTime - Math.floor(Date.now() / 1000));
+          
+          if (activeTab === 'public') {
+            setPublicTimer({
+              nextClaimTime: result.nextClaimTime,
+              timeRemaining,
+              isActive: true
+            });
+          } else {
+            setPrivateTimer({
+              nextClaimTime: result.nextClaimTime,
+              timeRemaining,
+              isActive: true
+            });
+          }
         }
       }
     } catch (error) {
@@ -467,11 +525,11 @@ export function FaucetPage() {
                     )}
 
                     {/* Next Claim Timer */}
-                    {claimTimer.isActive && claimTimer.timeRemaining && (
+                    {publicTimer.isActive && publicTimer.timeRemaining && (
                       <Alert>
                         <Clock className="h-4 w-4" />
                         <AlertDescription>
-                          Next claim available in: <strong>{claimTimer.timeRemaining}</strong>
+                          Next claim available in: <strong>{publicTimer.timeRemaining}</strong>
                         </AlertDescription>
                       </Alert>
                     )}
@@ -479,7 +537,7 @@ export function FaucetPage() {
                     {/* Claim Button */}
                     <Button 
                       onClick={handleClaim}
-                      disabled={isLoading || !address.trim() || !RECAPTCHA_SITE_KEY || claimTimer.isActive}
+                      disabled={isLoading || !address.trim() || !RECAPTCHA_SITE_KEY || publicTimer.isActive}
                       className="w-full"
                       size="lg"
                     >
@@ -488,10 +546,10 @@ export function FaucetPage() {
                           <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
                           Processing...
                         </>
-                      ) : claimTimer.isActive ? (
+                      ) : publicTimer.isActive ? (
                         <>
                           <Clock className="h-4 w-4 mr-2" />
-                          Claim Available in {claimTimer.timeRemaining}
+                          Next claim available in: {publicTimer.timeRemaining}
                         </>
                       ) : (
                         <>
@@ -556,11 +614,11 @@ export function FaucetPage() {
                     )}
 
                     {/* Next Claim Timer */}
-                    {claimTimer.isActive && claimTimer.timeRemaining && (
+                    {privateTimer.isActive && privateTimer.timeRemaining && (
                       <Alert>
-                        <Clock className="h-4 w-4" />
+                        <Shield className="h-4 w-4" />
                         <AlertDescription>
-                          Next claim available in: <strong>{claimTimer.timeRemaining}</strong>
+                          Next private claim available in: <strong>{privateTimer.timeRemaining}</strong>
                         </AlertDescription>
                       </Alert>
                     )}
@@ -568,7 +626,7 @@ export function FaucetPage() {
                     {/* Claim Button */}
                     <Button 
                       onClick={handleClaim}
-                      disabled={isLoading || !address.trim() || !RECAPTCHA_SITE_KEY || claimTimer.isActive}
+                      disabled={isLoading || !address.trim() || !RECAPTCHA_SITE_KEY || privateTimer.isActive}
                       className="w-full bg-purple-600 hover:bg-purple-700 dark:bg-purple-700 dark:hover:bg-purple-600"
                       size="lg"
                     >
@@ -577,10 +635,10 @@ export function FaucetPage() {
                           <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
                           Processing...
                         </>
-                      ) : claimTimer.isActive ? (
+                      ) : privateTimer.isActive ? (
                         <>
-                          <Clock className="h-4 w-4 mr-2" />
-                          Claim Available in {claimTimer.timeRemaining}
+                          <Shield className="h-4 w-4 mr-2" />
+                          Next claim available in: {privateTimer.timeRemaining}
                         </>
                       ) : (
                         <>
