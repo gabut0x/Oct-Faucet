@@ -1,8 +1,9 @@
 import { redisClient } from '../server';
-import { createTransaction, sendTransaction, fetchFaucetBalance } from '../utils/blockchain';
+import { createTransaction, sendTransaction, fetchFaucetBalance, createPrivateTransfer } from '../utils/blockchain';
 import { logger } from '../utils/logger';
 
-const FAUCET_AMOUNT = 0.5;
+const FAUCET_AMOUNT = 1.0; // Changed from 0.5 to 1.0
+const PRIVATE_FAUCET_AMOUNT = 1.0; // Same amount but will be sent privately
 const ADDRESS_COOLDOWN = 24 * 60 * 60; // 24 hours in seconds
 const IP_COOLDOWN = 60 * 60; // 1 hour in seconds
 
@@ -21,6 +22,13 @@ interface FaucetStats {
   lastClaim: string | null;
 }
 
+interface PrivateFaucetStats {
+  totalClaimed: number;
+  totalUsers: number;
+  totalTransactions: number;
+  faucetBalance: string;
+  lastClaim: string | null;
+}
 interface EligibilityCheck {
   eligible: boolean;
   reason?: string;
@@ -102,6 +110,70 @@ export async function claimTokens(address: string, clientIP: string): Promise<Cl
   }
 }
 
+export async function claimPrivateTokens(address: string, clientIP: string): Promise<ClaimResult> {
+  try {
+    const now = Math.floor(Date.now() / 1000);
+    
+    // Check address cooldown (separate from public faucet)
+    const lastAddressClaim = await redisClient.get(`private-faucet:address:${address}`);
+    if (lastAddressClaim) {
+      const timeSinceLastClaim = now - parseInt(lastAddressClaim);
+      if (timeSinceLastClaim < ADDRESS_COOLDOWN) {
+        const nextClaimTime = parseInt(lastAddressClaim) + ADDRESS_COOLDOWN;
+        return {
+          success: false,
+          error: 'Address rate limit exceeded. You can claim again in 24 hours.',
+          nextClaimTime
+        };
+      }
+    }
+
+    // Check IP cooldown (separate from public faucet)
+    const lastIPClaim = await redisClient.get(`private-faucet:ip:${clientIP}`);
+    if (lastIPClaim) {
+      const timeSinceLastClaim = now - parseInt(lastIPClaim);
+      if (timeSinceLastClaim < IP_COOLDOWN) {
+        const nextClaimTime = parseInt(lastIPClaim) + IP_COOLDOWN;
+        return {
+          success: false,
+          error: 'IP rate limit exceeded. You can claim again in 1 hour.',
+          nextClaimTime
+        };
+      }
+    }
+
+    // Create and send private transfer
+    const txResult = await createPrivateTransfer(address, PRIVATE_FAUCET_AMOUNT);
+    
+    if (txResult.success && txResult.hash) {
+      // Update rate limiting records
+      await Promise.all([
+        redisClient.setEx(`private-faucet:address:${address}`, ADDRESS_COOLDOWN, now.toString()),
+        redisClient.setEx(`private-faucet:ip:${clientIP}`, IP_COOLDOWN, now.toString())
+      ]);
+
+      // Update private statistics
+      await updatePrivateStats(address, PRIVATE_FAUCET_AMOUNT, txResult.hash);
+
+      return {
+        success: true,
+        txHash: txResult.hash
+      };
+    } else {
+      logger.error('Private transaction failed', { address, error: txResult.error });
+      return {
+        success: false,
+        error: txResult.error || 'Private transaction failed'
+      };
+    }
+  } catch (error) {
+    logger.error('Claim private tokens error', { address, clientIP, error });
+    return {
+      success: false,
+      error: 'Internal server error'
+    };
+  }
+}
 export async function checkEligibility(address: string): Promise<EligibilityCheck> {
   try {
     const now = Math.floor(Date.now() / 1000);
@@ -161,6 +233,33 @@ export async function getStats(): Promise<FaucetStats> {
   }
 }
 
+export async function getPrivateStats(): Promise<PrivateFaucetStats> {
+  try {
+    const [totalClaimed, totalUsers, totalTransactions, lastClaim] = await Promise.all([
+      redisClient.get('private-faucet:stats:totalClaimed'),
+      redisClient.get('private-faucet:stats:totalUsers'),
+      redisClient.get('private-faucet:stats:totalTransactions'),
+      redisClient.get('private-faucet:stats:lastClaim')
+    ]);
+
+    return {
+      totalClaimed: parseFloat(totalClaimed || '0'),
+      totalUsers: parseInt(totalUsers || '0'),
+      totalTransactions: parseInt(totalTransactions || '0'),
+      faucetBalance: "Private OCT",
+      lastClaim
+    };
+  } catch (error) {
+    logger.error('Get private stats error', error);
+    return {
+      totalClaimed: 0,
+      totalUsers: 0,
+      totalTransactions: 0,
+      faucetBalance: "Private OCT",
+      lastClaim: null
+    };
+  }
+}
 async function updateStats(address: string, amount: number, txHash: string): Promise<void> {
   try {
     const now = new Date().toISOString();
@@ -193,5 +292,40 @@ async function updateStats(address: string, amount: number, txHash: string): Pro
     ]);
   } catch (error) {
     logger.error('Update stats error', { address, amount, txHash, error });
+  }
+}
+async function updatePrivateStats(address: string, amount: number, txHash: string): Promise<void> {
+  try {
+    const now = new Date().toISOString();
+    
+    // Check if this is a new user for private faucet
+    const isNewUser = !(await redisClient.exists(`private-faucet:user:${address}`));
+    
+    await Promise.all([
+      // Update total claimed
+      redisClient.incrByFloat('private-faucet:stats:totalClaimed', amount),
+      
+      // Update total transactions
+      redisClient.incr('private-faucet:stats:totalTransactions'),
+      
+      // Update total users if new
+      isNewUser ? redisClient.incr('private-faucet:stats:totalUsers') : Promise.resolve(),
+      
+      // Mark user as seen
+      redisClient.set(`private-faucet:user:${address}`, '1'),
+      
+      // Update last claim time
+      redisClient.set('private-faucet:stats:lastClaim', now),
+      
+      // Store transaction record
+      redisClient.hSet(`private-faucet:tx:${txHash}`, {
+        address,
+        amount: amount.toString(),
+        timestamp: now,
+        type: 'private'
+      })
+    ]);
+  } catch (error) {
+    logger.error('Update private stats error', { address, amount, txHash, error });
   }
 }

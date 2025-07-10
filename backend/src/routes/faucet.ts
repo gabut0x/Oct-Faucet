@@ -1,7 +1,7 @@
 import { Router, Request, Response, NextFunction } from 'express';
 import { body, validationResult } from 'express-validator';
 import rateLimit from 'express-rate-limit';
-import { claimTokens, getStats, checkEligibility } from '../services/faucetService';
+import { claimTokens, getStats, checkEligibility, claimPrivateTokens, getPrivateStats } from '../services/faucetService';
 import { verifyRecaptcha } from '../services/recaptchaService';
 import { logger } from '../utils/logger';
 
@@ -62,6 +62,15 @@ router.get('/stats', async (req: Request, res: Response, next: NextFunction) => 
   }
 });
 
+// Get private faucet statistics
+router.get('/stats-private', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const stats = await getPrivateStats();
+    res.json(stats);
+  } catch (error) {
+    next(error);
+  }
+});
 // Check if address is eligible for claim
 router.get('/eligibility/:address', async (req: Request, res: Response, next: NextFunction) => {
   try {
@@ -143,4 +152,63 @@ router.post('/claim',
   }
 );
 
+// Claim private tokens - custom rate limiting logic
+router.post('/claim-private', 
+  validateClaimRequest,
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      // Check validation errors first
+      const errors = validationResult(req);
+      if (!errors.isEmpty()) {
+        logger.warn('Validation failed for private faucet claim', {
+          errors: errors.array(),
+          ip: req.ip
+        });
+        return res.status(400).json({ 
+          error: 'Validation failed', 
+          details: errors.array() 
+        });
+      }
+
+      const { address, recaptchaToken } = req.body;
+      const clientIP = req.ip || req.connection.remoteAddress || 'unknown';
+
+      logger.info('Private faucet claim attempt', { 
+        address, 
+        ip: clientIP,
+        userAgent: req.get('User-Agent'),
+        xForwardedFor: req.get('X-Forwarded-For'),
+        xRealIp: req.get('X-Real-IP')
+      });
+
+      // Verify reCAPTCHA first (before rate limiting)
+      const isRecaptchaValid = await verifyRecaptcha(recaptchaToken, clientIP);
+      if (!isRecaptchaValid) {
+        logger.warn('Invalid reCAPTCHA attempt for private claim', { address, ip: clientIP });
+        return res.status(400).json({ error: 'reCAPTCHA verification failed' });
+      }
+
+      // Process private claim
+      const result = await claimPrivateTokens(address, clientIP);
+      
+      if (result.success) {
+        logger.info('Successful private faucet claim', { 
+          address, 
+          ip: clientIP, 
+          txHash: result.txHash 
+        });
+        res.json(result);
+      } else {
+        logger.warn('Failed private faucet claim', { 
+          address, 
+          ip: clientIP, 
+          error: result.error 
+        });
+        res.status(400).json(result);
+      }
+    } catch (error) {
+      next(error);
+    }
+  }
+);
 export { router as faucetRouter };

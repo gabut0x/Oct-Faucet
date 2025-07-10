@@ -3,6 +3,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
@@ -15,18 +16,29 @@ import {
   Copy,
   Clock,
   Users,
-  RefreshCw
+  RefreshCw,
+  Eye,
+  EyeOff,
+  Gift
 } from 'lucide-react';
 import ReCAPTCHA from 'react-google-recaptcha';
 import { ThemeToggle } from './ThemeToggle';
 import { useToast } from '@/hooks/use-toast';
-import { sendFaucetTransaction, getFaucetStats } from '../utils/faucet';
+import { sendFaucetTransaction, getFaucetStats, sendPrivateFaucetTransaction, getPrivateFaucetStats } from '../utils/faucet';
 
 interface FaucetStats {
   totalClaimed: number;
   totalUsers: number;
   totalTransactions: number;
   faucetBalance: number;
+  lastClaim: string | null;
+}
+
+interface PrivateFaucetStats {
+  totalClaimed: number;
+  totalUsers: number;
+  totalTransactions: number;
+  faucetBalance: string; // "Private OCT"
   lastClaim: string | null;
 }
 
@@ -37,6 +49,7 @@ interface ClaimTimer {
 }
 
 export function FaucetPage() {
+  const [activeTab, setActiveTab] = useState('public');
   const [address, setAddress] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [lastTxHash, setLastTxHash] = useState<string | null>(null);
@@ -47,10 +60,18 @@ export function FaucetPage() {
     faucetBalance: 0,
     lastClaim: null
   });
+  const [privateStats, setPrivateStats] = useState<PrivateFaucetStats>({
+    totalClaimed: 0,
+    totalUsers: 0,
+    totalTransactions: 0,
+    faucetBalance: "Private OCT",
+    lastClaim: null
+  });
   const [isLoadingStats, setIsLoadingStats] = useState(true);
+  const [isLoadingPrivateStats, setIsLoadingPrivateStats] = useState(true);
   const [claimTimer, setClaimTimer] = useState<ClaimTimer>(() => {
     // Load timer from localStorage on component mount
-    const savedTimer = localStorage.getItem('faucet-timer');
+    const savedTimer = localStorage.getItem(`faucet-timer-${activeTab}`);
     if (savedTimer) {
       try {
         const parsed = JSON.parse(savedTimer);
@@ -82,7 +103,45 @@ export function FaucetPage() {
   // Load stats from server on component mount
   useEffect(() => {
     loadStatsFromServer();
+    loadPrivateStatsFromServer();
   }, []);
+
+  // Update timer storage key when tab changes
+  useEffect(() => {
+    const savedTimer = localStorage.getItem(`faucet-timer-${activeTab}`);
+    if (savedTimer) {
+      try {
+        const parsed = JSON.parse(savedTimer);
+        const now = Math.floor(Date.now() / 1000);
+        if (parsed.nextClaimTime && parsed.nextClaimTime > now) {
+          setClaimTimer({
+            nextClaimTime: parsed.nextClaimTime,
+            timeRemaining: '',
+            isActive: true
+          });
+        } else {
+          setClaimTimer({
+            nextClaimTime: null,
+            timeRemaining: '',
+            isActive: false
+          });
+        }
+      } catch (error) {
+        console.error('Failed to parse saved timer:', error);
+        setClaimTimer({
+          nextClaimTime: null,
+          timeRemaining: '',
+          isActive: false
+        });
+      }
+    } else {
+      setClaimTimer({
+        nextClaimTime: null,
+        timeRemaining: '',
+        isActive: false
+      });
+    }
+  }, [activeTab]);
 
   // Timer effect to update remaining time every second
   useEffect(() => {
@@ -101,7 +160,7 @@ export function FaucetPage() {
             nextClaimTime: null
           }));
           // Clear from localStorage
-          localStorage.removeItem('faucet-timer');
+          localStorage.removeItem(`faucet-timer-${activeTab}`);
         } else {
           const timeString = formatTimeRemaining(timeLeft);
           setClaimTimer(prev => ({
@@ -117,16 +176,16 @@ export function FaucetPage() {
         clearInterval(interval);
       }
     };
-  }, [claimTimer.isActive, claimTimer.nextClaimTime]);
+  }, [claimTimer.isActive, claimTimer.nextClaimTime, activeTab]);
 
   // Save timer to localStorage whenever it changes
   useEffect(() => {
     if (claimTimer.nextClaimTime) {
-      localStorage.setItem('faucet-timer', JSON.stringify({
+      localStorage.setItem(`faucet-timer-${activeTab}`, JSON.stringify({
         nextClaimTime: claimTimer.nextClaimTime
       }));
     }
-  }, [claimTimer.nextClaimTime]);
+  }, [claimTimer.nextClaimTime, activeTab]);
 
   const loadStatsFromServer = async () => {
     setIsLoadingStats(true);
@@ -142,6 +201,23 @@ export function FaucetPage() {
       });
     } finally {
       setIsLoadingStats(false);
+    }
+  };
+
+  const loadPrivateStatsFromServer = async () => {
+    setIsLoadingPrivateStats(true);
+    try {
+      const serverStats = await getPrivateFaucetStats();
+      setPrivateStats(serverStats);
+    } catch (error) {
+      console.error('Failed to load private stats from server:', error);
+      toast({
+        title: "Warning",
+        description: "Failed to load private faucet statistics",
+        variant: "destructive",
+      });
+    } finally {
+      setIsLoadingPrivateStats(false);
     }
   };
 
@@ -197,13 +273,16 @@ export function FaucetPage() {
     setIsLoading(true);
 
     try {
-      const result = await sendFaucetTransaction(address.trim(), recaptchaValue);
+      const result = activeTab === 'public' 
+        ? await sendFaucetTransaction(address.trim(), recaptchaValue)
+        : await sendPrivateFaucetTransaction(address.trim(), recaptchaValue);
       
       if (result.success) {
         setLastTxHash(result.txHash || null);
+        const amount = activeTab === 'public' ? '1 OCT' : 'Surprise! 🎉';
         toast({
           title: "Success!",
-          description: `Successfully sent 0.5 OCT to your address. Transaction hash: ${result.txHash?.slice(0, 16)}...`,
+          description: `Successfully sent ${amount} to your address. Transaction hash: ${result.txHash?.slice(0, 16)}...`,
         });
         
         // Set timer for next claim (24 hours)
@@ -219,7 +298,11 @@ export function FaucetPage() {
         recaptchaRef.current?.reset();
         
         // Reload stats from server after successful claim
-        await loadStatsFromServer();
+        if (activeTab === 'public') {
+          await loadStatsFromServer();
+        } else {
+          await loadPrivateStatsFromServer();
+        }
       } else {
         toast({
           title: "Claim Failed",
@@ -323,83 +406,193 @@ export function FaucetPage() {
                   Claim Free OCT
                 </CardTitle>
                 <p className="text-muted-foreground">
-                  Get 0.5 OCT tokens for testing on the Octra blockchain
+                  Get free OCT tokens for testing on the Octra blockchain
                 </p>
               </CardHeader>
               <CardContent className="space-y-6">
-                {/* Address Input */}
-                <div className="space-y-2">
-                  <Label htmlFor="address">Octra Address</Label>
-                  <Input
-                    id="address"
-                    type="text"
-                    placeholder="oct1234567890abcdef..."
-                    value={address}
-                    onChange={(e) => setAddress(e.target.value)}
-                    className="font-mono"
-                    disabled={isLoading}
-                  />
-                  <p className="text-sm text-muted-foreground">
-                    Enter your Octra wallet address (must start with 'oct')
-                  </p>
-                </div>
+                <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+                  <TabsList className="grid w-full grid-cols-2">
+                    <TabsTrigger value="public" className="flex items-center gap-2">
+                      <Droplets className="h-4 w-4" />
+                      Public Faucet
+                    </TabsTrigger>
+                    <TabsTrigger value="private" className="flex items-center gap-2">
+                      <Shield className="h-4 w-4" />
+                      Private Faucet
+                    </TabsTrigger>
+                  </TabsList>
 
-                {/* reCAPTCHA */}
-                {RECAPTCHA_SITE_KEY && (
-                  <div className="flex justify-center">
-                    <ReCAPTCHA
-                      ref={recaptchaRef}
-                      sitekey={RECAPTCHA_SITE_KEY}
-                      theme="light"
-                    />
-                  </div>
-                )}
+                  <TabsContent value="public" className="space-y-6 mt-6">
+                    <div className="text-center">
+                      <p className="text-muted-foreground">
+                        Get 1 OCT tokens for testing on the Octra blockchain
+                      </p>
+                    </div>
+                    
+                    {/* Address Input */}
+                    <div className="space-y-2">
+                      <Label htmlFor="address">Octra Address</Label>
+                      <Input
+                        id="address"
+                        type="text"
+                        placeholder="oct1234567890abcdef..."
+                        value={address}
+                        onChange={(e) => setAddress(e.target.value)}
+                        className="font-mono"
+                        disabled={isLoading}
+                      />
+                      <p className="text-sm text-muted-foreground">
+                        Enter your Octra wallet address (must start with 'oct')
+                      </p>
+                    </div>
 
-                {!RECAPTCHA_SITE_KEY && (
-                  <Alert>
-                    <AlertTriangle className="h-4 w-4" />
-                    <AlertDescription>
-                      reCAPTCHA is not configured. Please set VITE_RECAPTCHA_SITE_KEY in your environment variables.
-                    </AlertDescription>
-                  </Alert>
-                )}
+                    {/* reCAPTCHA */}
+                    {RECAPTCHA_SITE_KEY && (
+                      <div className="flex justify-center">
+                        <ReCAPTCHA
+                          ref={recaptchaRef}
+                          sitekey={RECAPTCHA_SITE_KEY}
+                          theme="light"
+                        />
+                      </div>
+                    )}
 
-                {/* Next Claim Timer */}
-                {claimTimer.isActive && claimTimer.timeRemaining && (
-                  <Alert>
-                    <Clock className="h-4 w-4" />
-                    <AlertDescription>
-                      Next claim available in: <strong>{claimTimer.timeRemaining}</strong>
-                    </AlertDescription>
-                  </Alert>
-                )}
+                    {!RECAPTCHA_SITE_KEY && (
+                      <Alert>
+                        <AlertTriangle className="h-4 w-4" />
+                        <AlertDescription>
+                          reCAPTCHA is not configured. Please set VITE_RECAPTCHA_SITE_KEY in your environment variables.
+                        </AlertDescription>
+                      </Alert>
+                    )}
 
-                {/* Claim Button */}
-                <Button 
-                  onClick={handleClaim}
-                  disabled={isLoading || !address.trim() || !RECAPTCHA_SITE_KEY || claimTimer.isActive}
-                  className="w-full"
-                  size="lg"
-                >
-                  {isLoading ? (
-                    <>
-                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
-                      Processing...
-                    </>
-                  ) : claimTimer.isActive ? (
-                    <>
-                      <Clock className="h-4 w-4 mr-2" />
-                      Claim Available in {claimTimer.timeRemaining}
-                    </>
-                  ) : (
-                    <>
-                      <Droplets className="h-4 w-4 mr-2" />
-                      Claim 0.5 OCT
-                    </>
-                  )}
-                </Button>
+                    {/* Next Claim Timer */}
+                    {claimTimer.isActive && claimTimer.timeRemaining && (
+                      <Alert>
+                        <Clock className="h-4 w-4" />
+                        <AlertDescription>
+                          Next claim available in: <strong>{claimTimer.timeRemaining}</strong>
+                        </AlertDescription>
+                      </Alert>
+                    )}
 
-                {/* Last Transaction */}
+                    {/* Claim Button */}
+                    <Button 
+                      onClick={handleClaim}
+                      disabled={isLoading || !address.trim() || !RECAPTCHA_SITE_KEY || claimTimer.isActive}
+                      className="w-full"
+                      size="lg"
+                    >
+                      {isLoading ? (
+                        <>
+                          <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                          Processing...
+                        </>
+                      ) : claimTimer.isActive ? (
+                        <>
+                          <Clock className="h-4 w-4 mr-2" />
+                          Claim Available in {claimTimer.timeRemaining}
+                        </>
+                      ) : (
+                        <>
+                          <Droplets className="h-4 w-4 mr-2" />
+                          Claim 1 OCT
+                        </>
+                      )}
+                    </Button>
+                  </TabsContent>
+
+                  <TabsContent value="private" className="space-y-6 mt-6">
+                    <div className="text-center space-y-2">
+                      <div className="flex items-center justify-center gap-2">
+                        <Shield className="h-5 w-5 text-purple-500" />
+                        <span className="text-lg font-semibold text-purple-600 dark:text-purple-400">Private Transfer</span>
+                      </div>
+                      <p className="text-muted-foreground">
+                        Get encrypted OCT tokens - amount is a surprise! 🎉
+                      </p>
+                      <div className="bg-purple-50 dark:bg-purple-950/20 p-3 rounded-lg border border-purple-200 dark:border-purple-800">
+                        <p className="text-sm text-purple-700 dark:text-purple-300">
+                          Private transfers use encrypted balance technology for enhanced privacy
+                        </p>
+                      </div>
+                    </div>
+                    
+                    {/* Address Input */}
+                    <div className="space-y-2">
+                      <Label htmlFor="private-address">Octra Address</Label>
+                      <Input
+                        id="private-address"
+                        type="text"
+                        placeholder="oct1234567890abcdef..."
+                        value={address}
+                        onChange={(e) => setAddress(e.target.value)}
+                        className="font-mono"
+                        disabled={isLoading}
+                      />
+                      <p className="text-sm text-muted-foreground">
+                        Enter your Octra wallet address (must start with 'oct')
+                      </p>
+                    </div>
+
+                    {/* reCAPTCHA */}
+                    {RECAPTCHA_SITE_KEY && (
+                      <div className="flex justify-center">
+                        <ReCAPTCHA
+                          ref={recaptchaRef}
+                          sitekey={RECAPTCHA_SITE_KEY}
+                          theme="light"
+                        />
+                      </div>
+                    )}
+
+                    {!RECAPTCHA_SITE_KEY && (
+                      <Alert>
+                        <AlertTriangle className="h-4 w-4" />
+                        <AlertDescription>
+                          reCAPTCHA is not configured. Please set VITE_RECAPTCHA_SITE_KEY in your environment variables.
+                        </AlertDescription>
+                      </Alert>
+                    )}
+
+                    {/* Next Claim Timer */}
+                    {claimTimer.isActive && claimTimer.timeRemaining && (
+                      <Alert>
+                        <Clock className="h-4 w-4" />
+                        <AlertDescription>
+                          Next claim available in: <strong>{claimTimer.timeRemaining}</strong>
+                        </AlertDescription>
+                      </Alert>
+                    )}
+
+                    {/* Claim Button */}
+                    <Button 
+                      onClick={handleClaim}
+                      disabled={isLoading || !address.trim() || !RECAPTCHA_SITE_KEY || claimTimer.isActive}
+                      className="w-full bg-purple-600 hover:bg-purple-700 dark:bg-purple-700 dark:hover:bg-purple-600"
+                      size="lg"
+                    >
+                      {isLoading ? (
+                        <>
+                          <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                          Processing...
+                        </>
+                      ) : claimTimer.isActive ? (
+                        <>
+                          <Clock className="h-4 w-4 mr-2" />
+                          Claim Available in {claimTimer.timeRemaining}
+                        </>
+                      ) : (
+                        <>
+                          <Gift className="h-4 w-4 mr-2" />
+                          Claim Surprise! 🎉
+                        </>
+                      )}
+                    </Button>
+                  </TabsContent>
+                </Tabs>
+
+                {/* Last Transaction - shown for both tabs */}
                 {lastTxHash && (
                   <div className="p-4 bg-green-50 dark:bg-green-950/50 rounded-lg border border-green-200 dark:border-green-800">
                     <div className="flex items-start">
@@ -447,17 +640,31 @@ export function FaucetPage() {
             <Card>
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-4">
                 <CardTitle className="text-lg">Faucet Statistics</CardTitle>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={loadStatsFromServer}
-                  disabled={isLoadingStats}
-                >
-                  <RefreshCw className={`h-4 w-4 ${isLoadingStats ? 'animate-spin' : ''}`} />
-                </Button>
+                <div className="flex items-center gap-2">
+                  {activeTab === 'public' && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={loadStatsFromServer}
+                      disabled={isLoadingStats}
+                    >
+                      <RefreshCw className={`h-4 w-4 ${isLoadingStats ? 'animate-spin' : ''}`} />
+                    </Button>
+                  )}
+                  {activeTab === 'private' && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={loadPrivateStatsFromServer}
+                      disabled={isLoadingPrivateStats}
+                    >
+                      <RefreshCw className={`h-4 w-4 ${isLoadingPrivateStats ? 'animate-spin' : ''}`} />
+                    </Button>
+                  )}
+                </div>
               </CardHeader>
               <CardContent className="space-y-4">
-                {isLoadingStats ? (
+                {(activeTab === 'public' ? isLoadingStats : isLoadingPrivateStats) ? (
                   <div className="space-y-2">
                     <div className="h-4 bg-muted animate-pulse rounded"></div>
                     <div className="h-4 bg-muted animate-pulse rounded"></div>
@@ -465,31 +672,67 @@ export function FaucetPage() {
                   </div>
                 ) : (
                   <>
-                    <div className="flex justify-between">
-                      <span className="text-muted-foreground">Total Claimed:</span>
-                      <span className="font-mono font-medium">{stats.totalClaimed.toFixed(1)} OCT</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-muted-foreground">Total Users:</span>
-                      <span className="font-mono font-medium">{stats.totalUsers}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-muted-foreground">Total Transactions:</span>
-                      <span className="font-mono font-medium">{stats.totalTransactions}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-muted-foreground">Faucet Balance:</span>
-                      <span className="font-mono font-medium">{stats.faucetBalance.toFixed(1)} OCT</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-muted-foreground">Amount per Claim:</span>
-                      <span className="font-mono font-medium">0.5 OCT</span>
-                    </div>
-                    {stats.lastClaim && (
-                      <div className="flex justify-between">
-                        <span className="text-muted-foreground">Last Claim:</span>
-                        <span className="text-sm">{new Date(stats.lastClaim).toLocaleTimeString()}</span>
-                      </div>
+                    {activeTab === 'public' ? (
+                      <>
+                        <div className="flex justify-between">
+                          <span className="text-muted-foreground">Total Claimed:</span>
+                          <span className="font-mono font-medium">{stats.totalClaimed.toFixed(1)} OCT</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-muted-foreground">Total Users:</span>
+                          <span className="font-mono font-medium">{stats.totalUsers}</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-muted-foreground">Total Transactions:</span>
+                          <span className="font-mono font-medium">{stats.totalTransactions}</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-muted-foreground">Faucet Balance:</span>
+                          <span className="font-mono font-medium">{stats.faucetBalance.toFixed(1)} OCT</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-muted-foreground">Amount per Claim:</span>
+                          <span className="font-mono font-medium">1 OCT</span>
+                        </div>
+                        {stats.lastClaim && (
+                          <div className="flex justify-between">
+                            <span className="text-muted-foreground">Last Claim:</span>
+                            <span className="text-sm">{new Date(stats.lastClaim).toLocaleTimeString()}</span>
+                          </div>
+                        )}
+                      </>
+                    ) : (
+                      <>
+                        <div className="flex justify-between">
+                          <span className="text-muted-foreground">Total Claimed:</span>
+                          <span className="font-mono font-medium text-purple-600 dark:text-purple-400">Private OCT</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-muted-foreground">Total Users:</span>
+                          <span className="font-mono font-medium">{privateStats.totalUsers}</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-muted-foreground">Total Transactions:</span>
+                          <span className="font-mono font-medium">{privateStats.totalTransactions}</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-muted-foreground">Faucet Balance:</span>
+                          <span className="font-mono font-medium text-purple-600 dark:text-purple-400">Private OCT</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-muted-foreground">Amount per Claim:</span>
+                          <div className="flex items-center gap-1">
+                            <span className="font-mono font-medium">Surprise</span>
+                            <Gift className="h-4 w-4 text-yellow-500" />
+                          </div>
+                        </div>
+                        {privateStats.lastClaim && (
+                          <div className="flex justify-between">
+                            <span className="text-muted-foreground">Last Claim:</span>
+                            <span className="text-sm">{new Date(privateStats.lastClaim).toLocaleTimeString()}</span>
+                          </div>
+                        )}
+                      </>
                     )}
                   </>
                 )}
@@ -508,6 +751,11 @@ export function FaucetPage() {
           <p>
             Use responsibly and only for testing purposes. Rate limits are enforced to ensure fair distribution.
           </p>
+          {activeTab === 'private' && (
+            <p className="mt-2 text-purple-600 dark:text-purple-400">
+              Private transfers use encrypted balance technology for enhanced privacy.
+            </p>
+          )}
         </footer>
       </main>
     </div>
